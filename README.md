@@ -15,7 +15,7 @@
 - 의존성 버전 관리
 - 문서 보안
 - 협업 방식
-- 보안 (S2S HMAC 인증, SQL Injection 방지, 비밀번호 저장, XSS/CSRF/httpOnly 쿠키)
+- 보안 (S2S HMAC 인증, SQL Injection 방지, 비밀번호 저장, XSS/CSRF/httpOnly 쿠키, 외부 diff/PR 프롬프트 인젝션 방지)
 
 ## 설치
 

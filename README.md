@@ -54,9 +54,9 @@ cp /tmp/tdcs/commands/*.md .claude/commands/
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)
 
-위 4개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돈다. `.gitignore`의 `.env` 누락, `.env.example`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
+위 4개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env` 누락, `.env.example`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
 
-다른 프로젝트에 이 스킬을 설치한 뒤 적용하려면:
+설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다.
 
 ```bash
 npm install husky --save-dev
@@ -69,9 +69,11 @@ npx husky init
 node .claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js
 ```
 
+이 경로는 Claude Code의 `npx skills add`로 설치했을 때 기준이다. Claude Code를 안 쓴다면 이 저장소의 `scripts/pre-commit-privacy-scan.js` 파일 하나만 프로젝트 아무 위치(예: `scripts/`)에 복사하고, 위 명령의 경로를 그 위치에 맞게 바꾸면 된다.
+
 ## 설계 원칙
 
-4개 에이전트 모두 아래 원칙을 동일하게 따른다.
+위 4개 서브에이전트는 아래 원칙을 동일하게 따른다.
 
 - **단일 출처 원칙** — SKILL.md 규칙 문구를 에이전트 파일에 복제하지 않고,
   실행 시점마다 Glob/Read로 해당 절을 직접 읽어 판단 기준으로 삼음

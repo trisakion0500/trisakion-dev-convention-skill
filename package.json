@@ -1,0 +1,24 @@
+{
+  "name": "trisakion-dev-convention-skill",
+  "version": "1.0.0",
+  "description": "개발 컨벤션(SP/동시성/보안 설계 원칙)을 Claude Code 스킬로 구조화하고, 그 컨벤션을 코드에 자동으로 강제하는 검증 서브에이전트를 붙인 프로젝트.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trisakion0500/trisakion-dev-convention-skill.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "bugs": {
+    "url": "https://github.com/trisakion0500/trisakion-dev-convention-skill/issues"
+  },
+  "homepage": "https://github.com/trisakion0500/trisakion-dev-convention-skill#readme",
+  "devDependencies": {
+    "husky": "9.1.7"
+  }
+}

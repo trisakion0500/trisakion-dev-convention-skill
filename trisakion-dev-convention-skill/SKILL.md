@@ -337,3 +337,48 @@ throw new BusinessException(ResultCode.PROJECT_NOT_FOUND);
 - 이 원칙은 특정 플러그인 하나에 국한되지 않고, 신뢰할 수 없는 외부 코드(다른 사람이 작성한 PR, 외부 저장소 등)를 다루는 모든 리뷰/설명/분석 작업에 적용된다.
 - 본인이 작성한 신뢰 가능한 코드(GM Platform, Coupon Platform 등 자신의 프로젝트)를 대상으로 할 때는 이 원칙이 실질적 위험은 낮지만, 습관적으로 지켜서 외부 코드를 다룰 때도 자연스럽게 적용되도록 한다.
 
+## 15. 커밋 전 크리덴셜 노출 방지
+
+**목적은 "개인 신상정보" 탐지가 아니라, 유출 시 실질적 피해로 이어지는 크리덴셜류(비밀번호, API 키, 시크릿) 탐지다.** 이 장은 Claude Code 에이전트(LLM 판단)가 아니라 **husky pre-commit 훅으로 커밋 시점마다 강제 실행되는 순수 Node 스크립트**로 구현한다 — 패턴/파일 존재 여부만으로 판별 가능해 LLM 판단이 필요 없고, 매 커밋마다 토큰 소모 없이 자동으로 돌아야 하기 때문이다. 구현체는 `scripts/pre-commit-privacy-scan.js`.
+
+### 15.1 스캔 대상
+
+1. `.gitignore`에 `.env`/`.env.*` 누락 → 🔴
+2. `.env.example`(또는 `.env.sample`)에 플레이스홀더가 아닌 실제 값 → 🔴
+   - 플레이스홀더로 인정: `your_` 접두어, 빈 값(`KEY=`), 알려진 더미 키워드(`changeme`, `xxx`, `<...>`, `TODO`, `CHANGE_ME` 등), 순수 설정값(불리언/숫자/시간단위/로컬 URL)
+   - 콤마로 나열된 다중값 필드(예: `CORS_ALLOWED_ORIGINS`)는 개별 값으로 분리해서 각각 판정
+3. 스테이징된 파일 내 크리덴셜 리터럴 패턴:
+   - API Key/Secret, Authorization 헤더 리터럴 값
+   - `JWT_SECRET`, `JWT_PRIVATE_KEY` 등 서명 키
+   - DB/Redis 커넥션 스트링(`mysql://user:pass@host`, `redis://:password@host:port`)
+   - AWS Access Key(`AKIA...`), GitHub PAT(`ghp_`, `github_pat_`)
+   - Private key 블록(`-----BEGIN ... PRIVATE KEY-----`)
+   - MCP 서버 설정 파일(`.mcp.json` 등)에 env 대신 args에 직접 박힌 키
+4. 공인 IP 리터럴 → 🔴
+   - 예외(통과): `127.0.0.1`, `localhost`, `0.0.0.0`, 사설 대역(`192.168.*`, `10.*`, `172.16~31.*`)
+5. 이메일 주소 → 판정 제외
+
+### 15.2 판정 체계
+
+2단계만 사용한다 — 🔴 위반 / 통과. 애매한 경우도 보수적으로 🔴로 잡는다(이 영역은 오탐보다 미탐 비용이 훨씬 크다).
+
+### 15.3 스캔 범위 — 워킹트리/스테이징만, 히스토리는 별도
+
+이 훅은 현재 워킹트리 + 스테이징 상태만 검증한다. git 커밋 히스토리 전체 스캔은 이 훅의 역할이 아니다 — 이미 과거 커밋에 노출된 시크릿은 이 훅으로 해결되지 않고 키 로테이션·히스토리 재작성이 필요하다.
+
+### 15.4 public 전환 전 1회성 수동 체크리스트
+
+저장소를 처음 public으로 전환하기 전, 또는 그 이후 한 번씩 아래를 수동으로 확인한다.
+
+1. 히스토리에 `.env`류가 커밋된 적 있는지 확인:
+   ```bash
+   git log --all --full-history -- .env .env.local .env.*.local
+   ```
+2. 히스토리 전체에서 대표 크리덴셜 패턴이 걸린 적 있는지 확인(예):
+   ```bash
+   git log --all -p | grep -E "AKIA[0-9A-Z]{16}|ghp_[0-9A-Za-z]{36}|-----BEGIN (RSA |EC )?PRIVATE KEY-----"
+   ```
+3. 발견 시 대응 절차:
+   - 노출된 키/비밀번호는 히스토리에서 지우기 전에 **먼저 즉시 재발급/로테이션**한다 — 히스토리에서 지운다고 이미 유출된 값이 무효화되는 게 아니다.
+   - 히스토리 자체에서 제거가 필요하면 BFG Repo-Cleaner 또는 `git filter-repo`로 재작성한 뒤, 이미 push된 원격이 있다면 force-push와 함께 협업자 전원에게 재클론을 안내한다.
+

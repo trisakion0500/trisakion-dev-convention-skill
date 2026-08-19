@@ -52,6 +52,23 @@ cp /tmp/tdcs/commands/*.md .claude/commands/
 | `race-condition-checker` | 📋 예정 | SKILL.md 6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
 | `security-audit-agent` | 📋 예정 | SKILL.md 14장 (SQLi, XSS/CSRF, httpOnly 쿠키, PR 프롬프트 인젝션 등) | `/trisakion-sec` |
 
+## 커밋 전 크리덴셜 스캔 (pre-commit hook)
+
+위 4개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돈다. `.gitignore`의 `.env` 누락, `.env.example`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
+
+다른 프로젝트에 이 스킬을 설치한 뒤 적용하려면:
+
+```bash
+npm install husky --save-dev
+npx husky init
+```
+
+`.husky/pre-commit`에 아래 한 줄을 넣는다(설치 경로에 맞게 조정):
+
+```bash
+node .claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js
+```
+
 ## 설계 원칙
 
 4개 에이전트 모두 아래 원칙을 동일하게 따른다.

@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 
 function getRepoRoot() {
     return execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim();
@@ -140,23 +140,69 @@ function scanLine(filePath, lineNo, rawLine, isEnvExample, violations) {
     }
 }
 
-// 15.1-1: .gitignore에 .env/.env.* 누락 여부.
-function checkGitignore(repoRoot, violations) {
-    const gitignorePath = path.join(repoRoot, '.gitignore');
-    if (!fs.existsSync(gitignorePath)) {
-        violations.push({ filePath: '.gitignore', lineNo: 0, message: '.gitignore 파일 자체가 없음' });
-        return;
+// 15.1-1: 로컬 전용 설정/시크릿 파일이 .gitignore로 실제 커버되는지 확인할 때 항상 체크하는 경로.
+// 아직 파일이 실존하지 않아도 git check-ignore는 패턴 매칭만으로 판정 가능하다.
+const CANONICAL_RISKY_PATHS = ['.env', '.env.local', '.claude/settings.local.json'];
+
+const WALK_SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'coverage']);
+
+function isRiskyFilename(name) {
+    if (/\.(example|sample)$/i.test(name)) return false; // 템플릿 파일은 커밋 대상이라 제외
+    if (name === '.env') return true;
+    if (name.startsWith('.env.')) return true;
+    if (name === 'settings.local.json') return true;
+    return false;
+}
+
+// 저장소 전체(하위 디렉토리 포함)에서 위험 파일명과 동일한 실제 파일을 재귀 탐색한다 —
+// .claude/settings.local.json 같은 파일이 다른 위치(mcp_server_dev/.claude/...)에도 있을 수 있어서다.
+function findRiskyFilesInRepo(repoRoot) {
+    const found = [];
+    function walk(dir) {
+        let entries;
+        try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+        } catch {
+            return;
+        }
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                if (WALK_SKIP_DIRS.has(entry.name)) continue;
+                walk(path.join(dir, entry.name));
+            } else if (entry.isFile() && isRiskyFilename(entry.name)) {
+                const relPath = path.relative(repoRoot, path.join(dir, entry.name)).split(path.sep).join('/');
+                found.push(relPath);
+            }
+        }
     }
-    const lines = fs.readFileSync(gitignorePath, 'utf8').split('\n').map((l) => l.trim());
-    const covered = lines.some((l) => {
-        if (!l || l.startsWith('#')) return false;
-        const pattern = l.replace(/^\*\*\//, '').replace(/^!/, '');
-        return /^\.env(\.\*|\*)?$/.test(pattern);
-    });
-    if (!covered) {
+    walk(repoRoot);
+    return found;
+}
+
+// git check-ignore가 gitignore 스펙(anchoring 포함)을 직접 해석해 판정한다 —
+// .gitignore 텍스트를 파싱해 패턴 존재 여부만 보는 것보다 정확하다.
+function isIgnoredByGit(repoRoot, relPath) {
+    try {
+        execFileSync('git', ['check-ignore', '-v', relPath], { cwd: repoRoot, stdio: 'pipe' });
+        return true; // exit 0 = 매칭되는 규칙 있음
+    } catch (err) {
+        if (err.status === 1) return false; // 매칭되는 규칙 없음
+        return false; // 그 외 오류도 보수적으로 미커버 처리(오탐보다 미탐 비용이 크다)
+    }
+}
+
+function checkGitignoreCoverage(repoRoot, violations) {
+    if (!fs.existsSync(path.join(repoRoot, '.gitignore'))) {
+        violations.push({ filePath: '.gitignore', lineNo: 0, message: '.gitignore 파일 자체가 없음' });
+    }
+
+    const targets = new Set([...CANONICAL_RISKY_PATHS, ...findRiskyFilesInRepo(repoRoot)]);
+    for (const relPath of targets) {
+        if (isIgnoredByGit(repoRoot, relPath)) continue;
         violations.push({
-            filePath: '.gitignore', lineNo: 0,
-            message: '.env / .env.* 패턴이 없음 — .env, .env.* 를 추가할 것',
+            filePath: relPath, lineNo: 0,
+            message: '.gitignore에 걸리지 않음 — 슬래시 포함 경로형 패턴은 저장소 루트 기준으로만 매칭(anchored)되니, ' +
+                '하위 디렉토리까지 덮으려면 `**/` 접두어를 붙일 것 (`git check-ignore -v ' + relPath + '`로 직접 확인 가능)',
         });
     }
 }
@@ -165,7 +211,7 @@ function main() {
     const repoRoot = getRepoRoot();
     const violations = [];
 
-    checkGitignore(repoRoot, violations);
+    checkGitignoreCoverage(repoRoot, violations);
 
     const selfPath = path.relative(repoRoot, __filename).split(path.sep).join('/');
     const staged = getStagedFiles(repoRoot).filter((f) => f !== selfPath);

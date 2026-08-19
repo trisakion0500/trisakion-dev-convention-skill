@@ -5,3 +5,4 @@ node_modules/
 CLAUDE.md
 .env
 .env.*
+**/.claude/settings.local.json

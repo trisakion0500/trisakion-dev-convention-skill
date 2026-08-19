@@ -59,7 +59,7 @@ cp /tmp/tdcs/commands/*.md .claude/commands/
 설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다.
 
 ```bash
-npm install husky --save-dev
+npm install husky@9.1.7 --save-dev
 npx husky init
 ```
 

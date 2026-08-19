@@ -25,6 +25,22 @@ npx skills add trisakion0500/trisakion-dev-convention-skill --skill trisakion-de
 
 프로젝트 루트에서 실행하면 `.claude/skills/trisakion-dev-convention-skill/`에 설치됩니다.
 
+`--skill` 플래그는 지정한 스킬 디렉토리만 가져오므로, 이 저장소의 `agents/`·`commands/`는 함께 설치되지 않습니다. 아래 두 파일은 필요 시 프로젝트에 직접 복사하세요.
+
+- `agents/sp-convention-validator.md` → 프로젝트의 `.claude/agents/`
+- `commands/trisakion-spv.md` → 프로젝트의 `.claude/commands/`
+
+```bash
+git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git /tmp/tdcs
+mkdir -p .claude/agents .claude/commands
+cp /tmp/tdcs/agents/*.md .claude/agents/
+cp /tmp/tdcs/commands/*.md .claude/commands/
+```
+
+## SP 컨벤션 검증 서브에이전트
+
+`sp-convention-validator`는 SKILL.md 4장(SP/Function 컨벤션) 기준으로 SP/Function 파일을 검증하는 서브에이전트입니다. 기본적으로 변경분(미커밋/최근 커밋)만 스캔해 토큰을 아끼며, `/trisakion-spv` 슬래시 명령으로 호출할 수 있습니다.
+
 ## 업데이트
 
 이 저장소가 갱신된 뒤, 설치된 프로젝트에서:

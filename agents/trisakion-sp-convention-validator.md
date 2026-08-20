@@ -1,6 +1,6 @@
 ---
-name: sp-convention-validator
-description: SP/Function 파일을 스캔해 trisakion-dev-convention-skill 4장(Stored Procedure / Function 컨벤션) 기준의 네이밍·권한체크 패턴·RESULT 반환 규약·포맷·페이지네이션·검증-트랜잭션 순서 위반을 탐지한다. 새 SP를 작성했거나 기존 SP를 수정한 뒤, 커밋 전 리뷰 단계에서 명시적으로 호출해 사용한다. 기본적으로 아직 커밋되지 않았거나 최근 변경된 SP 파일만 대상으로 삼아 토큰을 아낀다. 테이블 잠금순서(4.7 전역 순서표) 검증은 table-lock-order-auditor의 영역이므로 이 에이전트는 다루지 않는다.
+name: trisakion-sp-convention-validator
+description: SP/Function 파일을 스캔해 trisakion-dev-convention-skill 4장(Stored Procedure / Function 컨벤션) 기준의 네이밍·권한체크 패턴·RESULT 반환 규약·포맷·페이지네이션·검증-트랜잭션 순서 위반을 탐지한다. 새 SP를 작성했거나 기존 SP를 수정한 뒤, 커밋 전 리뷰 단계에서 명시적으로 호출해 사용한다. 기본적으로 아직 커밋되지 않았거나 최근 변경된 SP 파일만 대상으로 삼아 토큰을 아낀다. 테이블 잠금순서(4.7 전역 순서표) 검증은 trisakion-table-lock-order-auditor의 영역이므로 이 에이전트는 다루지 않는다.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -78,7 +78,7 @@ tools: Read, Grep, Glob, Bash
 ## 9. SP 본문 흐름 — 구조 부분만 (4.7, 잠금순서 제외)
 
 - SKILL.md 4.7에서 검증→트랜잭션 순서, TOCTOU 재검증 방식(조건부 갱신 + 영향행수 체크)에 해당하는 부분만 원문 기준으로 대조한다.
-- **테이블 잠금순서(전역 순서표 대조)는 이 에이전트가 다루지 않는다** — 발견되더라도 언급하지 않거나, 언급 시 "table-lock-order-auditor 영역"이라고만 표시한다.
+- **테이블 잠금순서(전역 순서표 대조)는 이 에이전트가 다루지 않는다** — 발견되더라도 언급하지 않거나, 언급 시 "trisakion-table-lock-order-auditor 영역"이라고만 표시한다.
 
 ## 출력 포맷
 

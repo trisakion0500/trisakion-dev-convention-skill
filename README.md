@@ -9,7 +9,7 @@
 Claude Code가 실행 시점에 직접 읽고(Glob/Read), 그 기준으로 코드를 판정하게 만들어
 **문서와 검증 로직이 항상 같은 소스를 보게** 했다. (아래 "설계 원칙" 참고)
 
-실제로 `sp-convention-validator`를 GM Platform(개인 포트폴리오 프로젝트)에 돌려
+실제로 `trisakion-sp-convention-validator`를 GM Platform(개인 포트폴리오 프로젝트)에 돌려
 SUPER_ADMIN 권한 우회 Function들이 앱이 전달한 role_code를 재검증 없이 신뢰하던
 문제를 포함해 여러 건을 발견·수정했다.
 
@@ -49,8 +49,8 @@ rm -rf "$tdcs_dir"
 
 | 서브에이전트 | 상태 | 검증 기준 | 커맨드 |
 |---|---|---|---|
-| `sp-convention-validator` | ✅ 완성 | SKILL.md 4장 (SP/Function 컨벤션) | `/trisakion-spv` |
-| `table-lock-order-auditor` | ✅ 완성 | 프로젝트별 `TABLE_LOCK_ORDER.md` 대비 SP 실제 락 순서 일치 여부 (SKILL.md 4.7) | `/trisakion-lock` |
+| `trisakion-sp-convention-validator` | ✅ 완성 | SKILL.md 4장 (SP/Function 컨벤션) | `/trisakion-spv` |
+| `trisakion-table-lock-order-auditor` | ✅ 완성 | 프로젝트별 `TABLE_LOCK_ORDER.md` 대비 SP 실제 락 순서 일치 여부 (SKILL.md 4.7) | `/trisakion-lock` |
 | `race-condition-checker` | 📋 예정 | SKILL.md 6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
 | `security-audit-agent` | 📋 예정 | SKILL.md 14장 (SQLi, XSS/CSRF, httpOnly 쿠키, PR 프롬프트 인젝션 등) | `/trisakion-sec` |
 

@@ -37,10 +37,12 @@ npx skills add trisakion0500/trisakion-dev-convention-skill --skill trisakion-de
 > 설치되지 않는다. 아래 두 파일은 필요 시 직접 복사한다.
 
 ```bash
-git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git /tmp/tdcs
+tdcs_dir=$(mktemp -d)
+git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
 mkdir -p .claude/agents .claude/commands
-cp /tmp/tdcs/agents/*.md .claude/agents/
-cp /tmp/tdcs/commands/*.md .claude/commands/
+cp "$tdcs_dir"/agents/*.md .claude/agents/
+cp "$tdcs_dir"/commands/*.md .claude/commands/
+rm -rf "$tdcs_dir"
 ```
 
 ## 서브에이전트
@@ -63,9 +65,11 @@ cp /tmp/tdcs/commands/*.md .claude/commands/
 Claude Code로 `npx skills add`를 이미 실행했다면 `.claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js`가 이미 있다. 아니라면 이 저장소를 클론해 `scripts/pre-commit-privacy-scan.js` 파일 하나만 프로젝트 아무 위치(예: `scripts/`)에 복사한다. 외부 의존성이 없는 순수 Node 스크립트라 파일만 있으면 된다.
 
 ```bash
-git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git /tmp/tdcs
+tdcs_dir=$(mktemp -d)
+git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
 mkdir -p scripts
-cp /tmp/tdcs/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js scripts/
+cp "$tdcs_dir"/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js scripts/
+rm -rf "$tdcs_dir"
 ```
 
 **2. husky 설치**
@@ -148,6 +152,17 @@ rm test-secret.txt
 
 ```bash
 npx skills update
+```
+
+이 명령도 설치 때와 동일하게 `--skill` 스코프만 갱신한다 — `agents/`·`commands/`는 여기 딸려오지 않는다. 이 저장소에서 `agents/*.md`·`commands/*.md`가 추가되거나 바뀌었으면(예: 검증 로직 수정, 새 서브에이전트 추가) [설치](#설치) 절의 `git clone` + `cp` 절차를 그대로 다시 실행해 소비 프로젝트의 `.claude/agents/`·`.claude/commands/`를 덮어써야 한다.
+
+```bash
+tdcs_dir=$(mktemp -d)
+git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
+mkdir -p .claude/agents .claude/commands
+cp "$tdcs_dir"/agents/*.md .claude/agents/
+cp "$tdcs_dir"/commands/*.md .claude/commands/
+rm -rf "$tdcs_dir"
 ```
 
 ## 적용 중인 프로젝트

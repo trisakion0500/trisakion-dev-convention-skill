@@ -83,8 +83,10 @@ function stripComment(line) {
     return line.replace(/\s*(#|\/\/).*$/, '');
 }
 
-function isEnvExampleFile(filePath) {
-    return /(^|[\\/])\.env\.(example|sample)$/i.test(filePath);
+function isTemplateFile(filePath) {
+    if (/(^|[\\/])\.env\.(example|sample)$/i.test(filePath)) return true;
+    if (/(^|[\\/])\.mcp\.json\.sample$/i.test(filePath)) return true;
+    return false;
 }
 
 /**
@@ -92,10 +94,10 @@ function isEnvExampleFile(filePath) {
  * @param {string} filePath 저장소 루트 기준 상대 경로
  * @param {number} lineNo 1부터 시작하는 줄 번호
  * @param {string} rawLine 원본 줄
- * @param {boolean} isEnvExample .env.example/.env.sample 여부 — KEY=VALUE 판정 라벨만 달라진다
+ * @param {boolean} isTemplate .env.example/.env.sample/.mcp.json.sample 등 템플릿 파일 여부 — KEY=VALUE 판정 라벨만 달라진다
  * @param {Array} violations 출력용 위반 목록
  */
-function scanLine(filePath, lineNo, rawLine, isEnvExample, violations) {
+function scanLine(filePath, lineNo, rawLine, isTemplate, violations) {
     const line = stripComment(rawLine);
     if (!line.trim()) return;
 
@@ -123,7 +125,7 @@ function scanLine(filePath, lineNo, rawLine, isEnvExample, violations) {
         if (SUSPICIOUS_KEY_RE.test(key) && !isPlaceholderValue(value)) {
             violations.push({
                 filePath, lineNo,
-                message: isEnvExample
+                message: isTemplate
                     ? `${key} — 플레이스홀더가 아닌 실제 값으로 보임`
                     : `${key}에 실제 값으로 보이는 크리덴셜 리터럴`,
             });
@@ -142,7 +144,7 @@ function scanLine(filePath, lineNo, rawLine, isEnvExample, violations) {
 
 // 15.1-1: 로컬 전용 설정/시크릿 파일이 .gitignore로 실제 커버되는지 확인할 때 항상 체크하는 경로.
 // 아직 파일이 실존하지 않아도 git check-ignore는 패턴 매칭만으로 판정 가능하다.
-const CANONICAL_RISKY_PATHS = ['.env', '.env.local', '.claude/settings.local.json'];
+const CANONICAL_RISKY_PATHS = ['.env', '.env.local', '.claude/settings.local.json', '.mcp.json'];
 
 const WALK_SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', 'coverage']);
 
@@ -151,6 +153,7 @@ function isRiskyFilename(name) {
     if (name === '.env') return true;
     if (name.startsWith('.env.')) return true;
     if (name === 'settings.local.json') return true;
+    if (name === '.mcp.json') return true;
     return false;
 }
 
@@ -227,10 +230,10 @@ function main() {
         }
         if (isBinary(buf)) continue;
 
-        const isEnvExample = isEnvExampleFile(relPath);
+        const isTemplate = isTemplateFile(relPath);
         const text = buf.toString('utf8');
         const lines = text.split('\n');
-        lines.forEach((line, idx) => scanLine(relPath, idx + 1, line, isEnvExample, violations));
+        lines.forEach((line, idx) => scanLine(relPath, idx + 1, line, isTemplate, violations));
     }
 
     if (violations.length > 0) {

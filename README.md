@@ -51,8 +51,8 @@ rm -rf "$tdcs_dir"
 |---|---|---|---|
 | `trisakion-sp-convention-validator` | ✅ 완성 | SKILL.md 4장 (SP/Function 컨벤션) | `/trisakion-spv` |
 | `trisakion-table-lock-order-auditor` | ✅ 완성 | 프로젝트별 `TABLE_LOCK_ORDER.md` 대비 SP 실제 락 순서 일치 여부 (SKILL.md 4.7) | `/trisakion-lock` |
-| `race-condition-checker` | 📋 예정 | SKILL.md 6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
-| `security-audit-agent` | 📋 예정 | SKILL.md 14장 (SQLi, XSS/CSRF, httpOnly 쿠키, PR 프롬프트 인젝션 등) | `/trisakion-sec` |
+| `trisakion-race-condition-checker` | 📋 예정 | SKILL.md 6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
+| `trisakion-security-audit-agent` | 📋 예정 | SKILL.md 14장 (SQLi, XSS/CSRF, httpOnly 쿠키, PR 프롬프트 인젝션 등) | `/trisakion-sec` |
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)
 

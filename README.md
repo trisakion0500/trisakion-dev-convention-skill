@@ -56,20 +56,81 @@ cp /tmp/tdcs/commands/*.md .claude/commands/
 
 위 4개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env` 누락, `.env.example`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
 
-설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다.
+설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다. 아래는 빈 프로젝트 기준 전체 단계다.
+
+**1. 스크립트 파일 확보**
+
+Claude Code로 `npx skills add`를 이미 실행했다면 `.claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js`가 이미 있다. 아니라면 이 저장소를 클론해 `scripts/pre-commit-privacy-scan.js` 파일 하나만 프로젝트 아무 위치(예: `scripts/`)에 복사한다. 외부 의존성이 없는 순수 Node 스크립트라 파일만 있으면 된다.
+
+```bash
+git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git /tmp/tdcs
+mkdir -p scripts
+cp /tmp/tdcs/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js scripts/
+```
+
+**2. husky 설치**
+
+프로젝트에 `package.json`이 없으면 `npm install`이 최소 구성으로 하나 만들어준다. 설치 후 버전이 `^9.1.7`처럼 caret이 붙어있으면 지워서 정확한 버전으로 고정한다(컨벤션 10장 — 의존성은 `^`/`~` 없이 고정).
 
 ```bash
 npm install husky@9.1.7 --save-dev
+```
+
+`package.json`을 열어 아래처럼 되어 있는지 확인한다. `name`/`version`/`private`이 없으면 채워 넣는다(`private: true`는 실수로 `npm publish` 되는 걸 막는다).
+
+```json
+{
+  "name": "my-project",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "husky": "9.1.7"
+  }
+}
+```
+
+**3. husky 초기화**
+
+```bash
 npx husky init
 ```
 
-`.husky/pre-commit`에 아래 한 줄을 넣는다(설치 경로에 맞게 조정):
+`.husky/` 디렉토리와 `.husky/pre-commit`(기본 내용은 `npm test` 예시)이 생기고, `package.json`에 `"prepare": "husky"` 스크립트가 자동으로 추가된다(다른 사람이 `npm install` 할 때도 훅이 자동 활성화되게 함).
+
+**4. 훅 내용 교체**
+
+`.husky/pre-commit` 파일을 열어 내용을 전부 지우고 스크립트를 가리키는 한 줄로 바꾼다(1단계에서 복사한 경로에 맞게 조정).
+
+```bash
+node scripts/pre-commit-privacy-scan.js
+```
+
+Claude Code의 `npx skills add`로 설치했다면 경로는 아래가 된다.
 
 ```bash
 node .claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js
 ```
 
-이 경로는 Claude Code의 `npx skills add`로 설치했을 때 기준이다. Claude Code를 안 쓴다면 이 저장소의 `scripts/pre-commit-privacy-scan.js` 파일 하나만 프로젝트 아무 위치(예: `scripts/`)에 복사하고, 위 명령의 경로를 그 위치에 맞게 바꾸면 된다.
+husky 9는 예전 버전과 달리 `#!/usr/bin/env sh`나 `. "$(dirname ...)"` 같은 보일러플레이트가 필요 없다. 실행할 명령만 그대로 적으면 된다.
+
+**5. 동작 확인**
+
+가짜 크리덴셜로 커밋이 실제로 막히는지 확인한다.
+
+```bash
+echo 'API_SECRET=sk_live_1234567890abcdef1234567890' > test-secret.txt
+git add test-secret.txt
+git commit -m "test"
+```
+
+`🔴 커밋 전 크리덴셜 스캔 실패` 메시지와 함께 커밋이 거부되고 종료 코드가 0이 아니면 정상 동작이다. 확인 후 테스트 파일을 치운다.
+
+```bash
+git reset test-secret.txt
+rm test-secret.txt
+```
+
+이후 크리덴셜이 없는 정상 변경분을 커밋하면(예: `package.json`, `package-lock.json`, `.husky/pre-commit` 자체를 커밋) `커밋 전 크리덴셜 스캔 통과.` 메시지와 함께 정상적으로 커밋된다.
 
 ## 설계 원칙
 

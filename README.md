@@ -48,7 +48,7 @@ cp /tmp/tdcs/commands/*.md .claude/commands/
 | 서브에이전트 | 상태 | 검증 기준 | 커맨드 |
 |---|---|---|---|
 | `sp-convention-validator` | ✅ 완성 | SKILL.md 4장 (SP/Function 컨벤션) | `/trisakion-spv` |
-| `table-lock-order-auditor` | 🚧 진행중 | 프로젝트별 `TABLE_LOCK_ORDER.md` 대비 SP 실제 락 순서 일치 여부 | `/trisakion-lock` |
+| `table-lock-order-auditor` | ✅ 완성 | 프로젝트별 `TABLE_LOCK_ORDER.md` 대비 SP 실제 락 순서 일치 여부 (SKILL.md 4.7) | `/trisakion-lock` |
 | `race-condition-checker` | 📋 예정 | SKILL.md 6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
 | `security-audit-agent` | 📋 예정 | SKILL.md 14장 (SQLi, XSS/CSRF, httpOnly 쿠키, PR 프롬프트 인젝션 등) | `/trisakion-sec` |
 

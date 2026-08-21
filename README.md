@@ -54,10 +54,11 @@ rm -rf "$tdcs_dir"
 | `trisakion-race-condition-checker` | ✅ 완성 | SKILL.md 5장 본문/6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
 | `trisakion-batch-lifecycle-auditor` | ✅ 완성 | SKILL.md 5.1/5.2/5.3/7.4절 (배치 인스턴스 중복실행·정상종료 훅·시스템 행위자 sentinel·로그 파일명 인스턴스 suffix) | `/trisakion-batch` |
 | `trisakion-security-audit-agent` | ✅ 완성 | SKILL.md 14.1/14.2/14.3/14.4절 (S2S HMAC 인증·SQLi·비밀번호 저장·XSS/CSRF/httpOnly 쿠키) | `/trisakion-sec` |
+| `trisakion-agent-router` | ✅ 완성 | 자체 판정 기준 없음 — diff 내용을 보고 위 다섯 에이전트 중 필요한 것만 추천·오케스트레이션 | `/trisakion-route` |
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)
 
-위 6개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
+위 여섯 개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
 
 설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다. 아래는 빈 프로젝트 기준 전체 단계다.
 
@@ -139,7 +140,7 @@ rm test-secret.txt
 
 ## 설계 원칙
 
-위 6개 서브에이전트는 아래 원칙을 동일하게 따른다.
+위 다섯 개 검증 서브에이전트는 아래 원칙을 동일하게 따른다.
 
 - **단일 출처 원칙** — SKILL.md 규칙 문구를 에이전트 파일에 복제하지 않고,
   실행 시점마다 Glob/Read로 해당 절을 직접 읽어 판단 기준으로 삼음
@@ -148,6 +149,10 @@ rm test-secret.txt
   명시적 2단계 절차로 강제해 누락 방지
 - **diff 기반 범위 축소** — 기본은 미커밋/변경 파일만 스캔, 대조가 필요한 절만 예외적으로 전체 스캔
 - **3단계 판정** — 🔴 위반(명확) / 🟡 의심(오탐 가능성 인정) / ⚪ 스킵(옵트인 문서 부재, 사유 명시)
+
+`trisakion-agent-router`는 이 중 단일 출처 원칙(각 에이전트의 담당 범위를 복제하지 않고 실행 시점에 읽음)과
+diff 기반 범위 축소만 공유한다. 판정 대상이 아니라 판정을 누가 할지 고르는 라우터라 3단계 판정 대신
+diff 내용 기반 추천만 수행하고, 실행 여부는 항상 사용자 확인을 거친다.
 
 ## 업데이트
 

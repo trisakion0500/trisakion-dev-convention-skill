@@ -53,11 +53,11 @@ rm -rf "$tdcs_dir"
 | `trisakion-table-lock-order-auditor` | ✅ 완성 | 프로젝트별 `TABLE_LOCK_ORDER.md` 대비 SP 실제 락 순서 일치 여부 (SKILL.md 4.7) | `/trisakion-lock` |
 | `trisakion-race-condition-checker` | ✅ 완성 | SKILL.md 5장 본문/6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
 | `trisakion-batch-lifecycle-auditor` | ✅ 완성 | SKILL.md 5.1/5.2/5.3/7.4절 (배치 인스턴스 중복실행·정상종료 훅·시스템 행위자 sentinel·로그 파일명 인스턴스 suffix) | `/trisakion-batch` |
-| `trisakion-security-audit-agent` | 📋 예정 | SKILL.md 14장 (SQLi, XSS/CSRF, httpOnly 쿠키, PR 프롬프트 인젝션 등) | `/trisakion-sec` |
+| `trisakion-security-audit-agent` | ✅ 완성 | SKILL.md 14.1/14.2/14.3/14.4절 (S2S HMAC 인증·SQLi·비밀번호 저장·XSS/CSRF/httpOnly 쿠키) | `/trisakion-sec` |
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)
 
-위 5개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
+위 6개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
 
 설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다. 아래는 빈 프로젝트 기준 전체 단계다.
 
@@ -139,7 +139,7 @@ rm test-secret.txt
 
 ## 설계 원칙
 
-위 5개 서브에이전트는 아래 원칙을 동일하게 따른다.
+위 6개 서브에이전트는 아래 원칙을 동일하게 따른다.
 
 - **단일 출처 원칙** — SKILL.md 규칙 문구를 에이전트 파일에 복제하지 않고,
   실행 시점마다 Glob/Read로 해당 절을 직접 읽어 판단 기준으로 삼음

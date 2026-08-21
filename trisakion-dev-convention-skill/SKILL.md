@@ -348,7 +348,7 @@ throw new BusinessException(ResultCode.PROJECT_NOT_FOUND);
    - "패턴이 아예 없는 경우"뿐 아니라 "패턴은 있지만 실제로는 그 파일을 걸러내지 못하는 경우"도 위반이다. 특히 `.claude/settings.local.json`처럼 슬래시가 포함된 경로형 패턴은 **저장소 루트 기준으로만 매칭(anchored)**돼서, `mcp_server_dev/.claude/settings.local.json`처럼 하위 디렉토리에 있는 동일 파일명은 걸러지지 않는다 — 하위 디렉토리까지 덮으려면 `**/.claude/settings.local.json`처럼 `**/` 접두어를 붙여야 한다.
    - 그래서 판정은 `.gitignore` 파일을 텍스트로 파싱해 패턴 존재 여부만 보지 않고, 실제 파일 경로에 대해 `git check-ignore -v <path>`를 실행해 확인한다 — 이 명령이 gitignore 스펙(anchoring 포함)을 그대로 해석해 결과를 주기 때문에, 텍스트 파싱으로 패턴 유무만 보는 것보다 정확하다.
 2. `.env.example`(또는 `.env.sample`)·`.mcp.json.sample` 등 커밋 대상 템플릿 파일에 플레이스홀더가 아닌 실제 값 → 🔴
-   - 플레이스홀더로 인정: `your_` 접두어, 빈 값(`KEY=`), 알려진 더미 키워드(`changeme`, `xxx`, `<...>`, `TODO`, `CHANGE_ME` 등), 순수 설정값(불리언/숫자/시간단위/로컬 URL)
+   - 플레이스홀더로 인정: `your_` 접두어, 빈 값(`KEY=`), 알려진 더미 키워드(`changeme`, `xxx`, `<...>`, `TODO`, `CHANGE_ME` 등), 순수 설정값(불리언/숫자/시간단위/로컬 URL), 코드 참조(`process.env.`/`import.meta.env.`/`${...}` 접두어)
    - 콤마로 나열된 다중값 필드(예: `CORS_ALLOWED_ORIGINS`)는 개별 값으로 분리해서 각각 판정
 3. 스테이징된 파일 내 크리덴셜 리터럴 패턴(파일 종류 무관, 1항에서 걸러지지 않고 강제로 스테이징된 경우의 방어선):
    - API Key/Secret, Authorization 헤더 리터럴 값
@@ -356,6 +356,7 @@ throw new BusinessException(ResultCode.PROJECT_NOT_FOUND);
    - DB/Redis 커넥션 스트링(`mysql://user:pass@host`, `redis://:password@host:port`)
    - AWS Access Key(`AKIA...`), GitHub PAT(`ghp_`, `github_pat_`)
    - Private key 블록(`-----BEGIN ... PRIVATE KEY-----`)
+   - 일반 `key: value`/`KEY=value` 형태에서 키 이름에 password/secret/api_key/token류가 포함된 경우도 값을 검사한다 — 플레이스홀더 판정 기준은 2항과 동일하게 공유하며, **소스 코드 파일(`.ts`/`.js` 등)에서는 값이 따옴표로 시작하지 않으면 문법상 문자열 리터럴일 수 없으므로 식별자/프로퍼티 접근(예: `env.db.password`)을 코드 참조로 인정**한다. 이 코드 참조 예외는 소스 코드 파일에만 적용하고 `.env` 등 비코드 파일에는 적용하지 않는다 — 그런 파일은 따옴표 없는 값도 실제 리터럴이기 때문이다.
 4. 공인 IP 리터럴 → 🔴
    - 예외(통과): `127.0.0.1`, `localhost`, `0.0.0.0`, 사설 대역(`192.168.*`, `10.*`, `172.16~31.*`)
 5. 이메일 주소 → 판정 제외

@@ -29,8 +29,19 @@ const DUMMY_WORDS = new Set([
     'user', 'username', 'pass', 'password', 'secret', 'key', 'none', 'null',
 ]);
 
-function isSinglePlaceholder(rawValue) {
-    const value = rawValue.trim().replace(/^['"]|['"]$/g, '');
+// 코드 파일 확장자 — 이 안에서는 따옴표 없는 값이 문자열 리터럴일 수 없고 항상 식별자/표현식이다.
+const CODE_FILE_EXT_RE = /\.(js|jsx|mjs|cjs|ts|tsx|py|rb|go|java|kt|kts|cs|php|swift|scala|c|cc|cpp|h|hpp|rs)$/i;
+
+function isCodeSourceFile(filePath) {
+    return CODE_FILE_EXT_RE.test(filePath);
+}
+
+// 식별자/프로퍼티 접근/짧은 함수 호출 형태 — env.db.password, config.dbPassword 같은 코드 참조를 인식한다.
+const IDENTIFIER_EXPR_RE = /^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*|\[[^\]]+\])*(?:\(\))?[,;)]?$/;
+
+function isSinglePlaceholder(rawValue, isCodeFile) {
+    const trimmed = rawValue.trim();
+    const value = trimmed.replace(/^['"]|['"]$/g, '');
     if (value === '') return true;
     if (/^your_/i.test(value)) return true;
     if (value.startsWith('<') && value.endsWith('>')) return true;
@@ -40,11 +51,14 @@ function isSinglePlaceholder(rawValue) {
     if (/^\d+(ms|s|m|h|d)$/i.test(value)) return true; // 시간 단위
     if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/.*)?$/i.test(value)) return true; // 로컬 URL
     if (/^(process\.env\.|import\.meta\.env\.|\$\{)/.test(value)) return true; // 코드 참조
+    // 코드 파일에서 원본 값이 따옴표로 시작하지 않으면 문자열 리터럴이 아니라 식별자/프로퍼티 접근이다
+    // (예: password: env.db.password). 따옴표로 감싸인 실제 문자열 리터럴은 이 분기를 타지 않는다.
+    if (isCodeFile && !/^['"]/.test(trimmed) && IDENTIFIER_EXPR_RE.test(value)) return true;
     return false;
 }
 
-function isPlaceholderValue(rawValue) {
-    return rawValue.split(',').every((part) => isSinglePlaceholder(part));
+function isPlaceholderValue(rawValue, isCodeFile) {
+    return rawValue.split(',').every((part) => isSinglePlaceholder(part, isCodeFile));
 }
 
 // 15.1-3의 구조적 크리덴셜 패턴 — 어떤 파일이든 발견되면 무조건 위반.
@@ -95,9 +109,10 @@ function isTemplateFile(filePath) {
  * @param {number} lineNo 1부터 시작하는 줄 번호
  * @param {string} rawLine 원본 줄
  * @param {boolean} isTemplate .env.example/.env.sample/.mcp.json.sample 등 템플릿 파일 여부 — KEY=VALUE 판정 라벨만 달라진다
+ * @param {boolean} isCodeFile 소스 코드 파일 여부 — 따옴표 없는 값을 식별자/프로퍼티 접근(코드 참조)으로 인정할지 결정한다
  * @param {Array} violations 출력용 위반 목록
  */
-function scanLine(filePath, lineNo, rawLine, isTemplate, violations) {
+function scanLine(filePath, lineNo, rawLine, isTemplate, isCodeFile, violations) {
     const line = stripComment(rawLine);
     if (!line.trim()) return;
 
@@ -111,7 +126,7 @@ function scanLine(filePath, lineNo, rawLine, isTemplate, violations) {
     CONNECTION_STRING_RE.lastIndex = 0;
     while ((connMatch = CONNECTION_STRING_RE.exec(line)) !== null) {
         const [, scheme, user, pass] = connMatch;
-        if (!isSinglePlaceholder(user) || !isSinglePlaceholder(pass)) {
+        if (!isSinglePlaceholder(user, isCodeFile) || !isSinglePlaceholder(pass, isCodeFile)) {
             violations.push({
                 filePath, lineNo,
                 message: `${scheme} 커넥션 스트링에 실제 자격증명으로 보이는 값 포함`,
@@ -122,7 +137,7 @@ function scanLine(filePath, lineNo, rawLine, isTemplate, violations) {
     const kv = line.match(KV_LINE_RE);
     if (kv) {
         const [, key, value] = kv;
-        if (SUSPICIOUS_KEY_RE.test(key) && !isPlaceholderValue(value)) {
+        if (SUSPICIOUS_KEY_RE.test(key) && !isPlaceholderValue(value, isCodeFile)) {
             violations.push({
                 filePath, lineNo,
                 message: isTemplate
@@ -231,9 +246,10 @@ function main() {
         if (isBinary(buf)) continue;
 
         const isTemplate = isTemplateFile(relPath);
+        const isCodeFile = isCodeSourceFile(relPath);
         const text = buf.toString('utf8');
         const lines = text.split('\n');
-        lines.forEach((line, idx) => scanLine(relPath, idx + 1, line, isTemplate, violations));
+        lines.forEach((line, idx) => scanLine(relPath, idx + 1, line, isTemplate, isCodeFile, violations));
     }
 
     if (violations.length > 0) {
@@ -250,4 +266,20 @@ function main() {
     process.exit(0);
 }
 
-main();
+// `node pre-commit-privacy-scan.js --self-test`로 수동 실행 — 코드 참조(env.db.password류) 오탐 회귀 확인용.
+function selfTest() {
+    const assert = require('assert');
+    assert.strictEqual(isSinglePlaceholder('env.db.password,', true), true, '코드 파일의 프로퍼티 접근은 안전해야 함');
+    assert.strictEqual(isSinglePlaceholder('env.logDb.password', true), true, '코드 파일의 프로퍼티 접근은 안전해야 함');
+    assert.strictEqual(isSinglePlaceholder('"realSecret123"', true), false, '따옴표로 감싼 리터럴은 여전히 위반이어야 함 — 코드 문법상 문자열 리터럴은 항상 따옴표로 감싸이므로 이걸로 리터럴/식별자를 구분한다');
+    assert.strictEqual(isSinglePlaceholder('env.db.password', false), false, '코드 파일이 아니면(.env 등) 이 예외를 적용하면 안 됨 — 이런 파일에서는 따옴표 없는 값도 실제 리터럴이다');
+    console.log('pre-commit-privacy-scan self-test 통과.');
+}
+
+if (require.main === module) {
+    if (process.argv.includes('--self-test')) {
+        selfTest();
+    } else {
+        main();
+    }
+}

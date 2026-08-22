@@ -103,7 +103,9 @@ function isExemptIp(a, b, c) {
 }
 
 function stripComment(line) {
-    return line.replace(/\s*(#|\/\/).*$/, '');
+    // `//` 앞이 `:`면 주석이 아니라 URL 스킴(postgres://, https:// 등)이다 — 커넥션 스트링이
+    // 통째로 잘려나가 15.1-3 검사를 무력화하지 않도록 이 경우는 주석으로 보지 않는다.
+    return line.replace(/\s*(#|(?<!:)\/\/).*$/, '');
 }
 
 function isTemplateFile(filePath) {
@@ -119,9 +121,10 @@ function isTemplateFile(filePath) {
  * @param {string} rawLine 원본 줄
  * @param {boolean} isTemplate .env.example/.env.sample/.mcp.json.sample 등 템플릿 파일 여부 — KEY=VALUE 판정 라벨만 달라진다
  * @param {boolean} isCodeFile 소스 코드 파일 여부 — 따옴표 없는 값을 식별자/프로퍼티 접근(코드 참조)으로 인정할지 결정한다
+ * @param {boolean} isLocale i18n 리소스 파일 여부 — UI 라벨 키 이름 오탐이 나는 key:value 키 이름 검사만 건너뛴다
  * @param {Array} violations 출력용 위반 목록
  */
-function scanLine(filePath, lineNo, rawLine, isTemplate, isCodeFile, violations) {
+function scanLine(filePath, lineNo, rawLine, isTemplate, isCodeFile, isLocale, violations) {
     const line = stripComment(rawLine);
     if (!line.trim()) return;
 
@@ -131,11 +134,13 @@ function scanLine(filePath, lineNo, rawLine, isTemplate, isCodeFile, violations)
         }
     }
 
+    // 커넥션 스트링 조각은 문자열 중간에서 잘라낸 값이라 "따옴표로 시작 안 하면 식별자" 전제가 성립하지 않는다 —
+    // isCodeFile을 넘기지 않고 항상 리터럴로 취급해 파일 종류 무관하게 검사한다(15.1-3).
     let connMatch;
     CONNECTION_STRING_RE.lastIndex = 0;
     while ((connMatch = CONNECTION_STRING_RE.exec(line)) !== null) {
         const [, scheme, user, pass] = connMatch;
-        if (!isSinglePlaceholder(user, isCodeFile) || !isSinglePlaceholder(pass, isCodeFile)) {
+        if (!isSinglePlaceholder(user, false) || !isSinglePlaceholder(pass, false)) {
             violations.push({
                 filePath, lineNo,
                 message: `${scheme} 커넥션 스트링에 실제 자격증명으로 보이는 값 포함`,
@@ -144,7 +149,7 @@ function scanLine(filePath, lineNo, rawLine, isTemplate, isCodeFile, violations)
     }
 
     const kv = line.match(KV_LINE_RE);
-    if (kv) {
+    if (kv && !isLocale) {
         const [, key, value] = kv;
         if (SUSPICIOUS_KEY_RE.test(key) && !isPlaceholderValue(value, isCodeFile)) {
             violations.push({
@@ -244,7 +249,6 @@ function main() {
     const staged = getStagedFiles(repoRoot).filter((f) => f !== selfPath);
 
     for (const relPath of staged) {
-        if (isLocaleFile(relPath)) continue;
         const absPath = path.join(repoRoot, relPath);
         if (!fs.existsSync(absPath)) continue; // 삭제된 파일 등
         let buf;
@@ -257,9 +261,10 @@ function main() {
 
         const isTemplate = isTemplateFile(relPath);
         const isCodeFile = isCodeSourceFile(relPath);
+        const isLocale = isLocaleFile(relPath);
         const text = buf.toString('utf8');
         const lines = text.split(/\r?\n/); // CRLF에서도 stripComment의 `.*$`가 trailing \r에 막히지 않게 함
-        lines.forEach((line, idx) => scanLine(relPath, idx + 1, line, isTemplate, isCodeFile, violations));
+        lines.forEach((line, idx) => scanLine(relPath, idx + 1, line, isTemplate, isCodeFile, isLocale, violations));
     }
 
     if (violations.length > 0) {
@@ -289,6 +294,11 @@ function selfTest() {
 
     const [crlfLine] = '  api_secret: string; // 암호문\r\nnext'.split(/\r?\n/);
     assert.strictEqual(stripComment(crlfLine), '  api_secret: string;', 'CRLF 파일도 split(/\\r?\\n/)로 줄 끝 \\r를 미리 제거해야 stripComment가 정상 동작함');
+    assert.strictEqual(
+        stripComment("const uri = 'postgres://admin:pass@host/db'; // 진짜 주석"),
+        "const uri = 'postgres://admin:pass@host/db';",
+        'URL 스킴의 //는 주석이 아니므로 잘리면 안 되고, 그 뒤 진짜 //주석만 제거해야 함',
+    );
 
     assert.strictEqual(isExemptIp(203, 0, 113), true, 'RFC 5737 TEST-NET-3는 문서 예시용이라 예외여야 함');
     assert.strictEqual(isExemptIp(192, 0, 2), true, 'RFC 5737 TEST-NET-1도 예외여야 함');
@@ -298,6 +308,27 @@ function selfTest() {
     assert.strictEqual(isSinglePlaceholder('생략', false), true, '한국어 플레이스홀더 관용구도 인식해야 함');
     assert.strictEqual(isLocaleFile('frontend/src/locales/ko/common.json'), true, 'locales/ 하위 json은 i18n 리소스 파일로 인식해야 함');
     assert.strictEqual(isLocaleFile('frontend/src/config/common.json'), false, 'locales/ 밖의 json은 그대로 스캔 대상이어야 함');
+
+    // 코드 파일 안에 하드코딩된 커넥션 스트링은 "따옴표로 시작 안 하면 식별자" 예외를 적용하면 안 됨 —
+    // 이 값은 문자열 중간에서 잘라낸 조각이라 코드 참조일 수 없다(control-regression 회귀 방지).
+    {
+        const v = [];
+        scanLine('db.js', 1, "const uri = 'postgres://admin:Sup3r!Secret@10.20.30.40/prod';", false, true, false, v);
+        assert.ok(v.some((x) => x.message.includes('커넥션 스트링')), '코드 파일이어도 하드코딩된 커넥션 스트링 자격증명은 잡아야 함');
+    }
+
+    // i18n 리소스 파일은 key:value 키 이름 오탐만 면제하고, AWS 키 같은 구조적 패턴은 계속 잡아야 함
+    // (allowlist-scope-mismatch 회귀 방지 — 파일 전체를 건너뛰면 안 됨).
+    {
+        const v = [];
+        scanLine('frontend/src/locales/ko/common.json', 1, '  "passwordHint": "비밀번호를 입력하세요",', false, false, true, v);
+        assert.strictEqual(v.length, 0, 'locale 파일의 UI 라벨 키 이름 오탐은 계속 면제해야 함');
+
+        const v2 = [];
+        scanLine('frontend/src/locales/ko/common.json', 2, '  "leaked": "AKIAABCDEFGHIJKLMNOP",', false, false, true, v2);
+        assert.ok(v2.some((x) => x.message.includes('AWS')), 'locale 파일이어도 AWS 키 같은 구조적 패턴은 계속 잡아야 함');
+    }
+
     console.log('pre-commit-privacy-scan self-test 통과.');
 }
 

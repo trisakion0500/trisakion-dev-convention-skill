@@ -353,14 +353,14 @@ throw new BusinessException(ResultCode.PROJECT_NOT_FOUND);
 3. 스테이징된 파일 내 크리덴셜 리터럴 패턴(파일 종류 무관, 1항에서 걸러지지 않고 강제로 스테이징된 경우의 방어선):
    - API Key/Secret, Authorization 헤더 리터럴 값
    - `JWT_SECRET`, `JWT_PRIVATE_KEY` 등 서명 키
-   - DB/Redis 커넥션 스트링(`mysql://user:pass@host`, `redis://:password@host:port`)
+   - DB/Redis 커넥션 스트링(`mysql://user:pass@host`, `redis://:password@host:port`) — 이 user/pass는 코드 파일이어도 아래 코드 참조 예외를 적용하지 않는다. 커넥션 스트링 문자열 중간에서 잘라낸 조각이라 "따옴표로 시작하지 않으면 식별자"라는 전제 자체가 성립하지 않기 때문이다.
    - AWS Access Key(`AKIA...`), GitHub PAT(`ghp_`, `github_pat_`)
    - Private key 블록(`-----BEGIN ... PRIVATE KEY-----`)
    - 일반 `key: value`/`KEY=value` 형태에서 키 이름에 password/secret/api_key/token류가 포함된 경우도 값을 검사한다 — 플레이스홀더 판정 기준은 2항과 동일하게 공유하며, **소스 코드 파일(`.ts`/`.js` 등)에서는 값이 따옴표로 시작하지 않으면 문법상 문자열 리터럴일 수 없으므로 식별자/프로퍼티 접근(예: `env.db.password`)을 코드 참조로 인정**한다. 이 코드 참조 예외는 소스 코드 파일에만 적용하고 `.env` 등 비코드 파일에는 적용하지 않는다 — 그런 파일은 따옴표 없는 값도 실제 리터럴이기 때문이다.
 4. 공인 IP 리터럴 → 🔴
    - 예외(통과): `127.0.0.1`, `localhost`, `0.0.0.0`, 사설 대역(`192.168.*`, `10.*`, `172.16~31.*`), RFC 5737 문서/예제 전용 예약 대역(`192.0.2.*`, `198.51.100.*`, `203.0.113.*`)
 5. 이메일 주소 → 판정 제외
-6. i18n 리소스 파일(`locales/**/*.json`)은 판정 대상에서 제외 — 값이 전부 화면에 노출되는 UI 문구라 크리덴셜이 실릴 수 있는 파일 종류가 아니다.
+6. i18n 리소스 파일(`locales/**/*.json`)은 3항의 `key: value` 키 이름 검사(password/secret 등이 포함된 UI 라벨 키 오탐)만 제외 — 값이 전부 화면에 노출되는 UI 문구라 이 검사만 오탐을 낸다. AWS/GitHub 키·private key 블록·커넥션 스트링·공인 IP 등 나머지 패턴 검사는 파일 종류 무관 원칙(3항)에 따라 계속 적용한다.
 
 ### 15.2 판정 체계
 

@@ -362,7 +362,8 @@ function selfTest() {
         assert.ok(selfHash, '실행 중인 스크립트 자신의 해시는 항상 계산 가능해야 함');
         assert.strictEqual(isSelfScript(fs.readFileSync(__filename), selfHash), true, '자기 자신과 바이트 단위로 동일한 내용은 자기 자신으로 식별해야 함');
 
-        const crlfVariant = Buffer.from(fs.readFileSync(__filename, 'utf8').replace(/\n/g, '\r\n'));
+        const lfContent = fs.readFileSync(__filename, 'utf8').replace(/\r\n/g, '\n');
+        const crlfVariant = Buffer.from(lfContent.replace(/\n/g, '\r\n'));
         assert.strictEqual(isSelfScript(crlfVariant, selfHash), true, '줄바꿈 방식만 다른 사본(CRLF 체크아웃 등)도 자기 자신으로 식별해야 함');
 
         const forged = Buffer.from(

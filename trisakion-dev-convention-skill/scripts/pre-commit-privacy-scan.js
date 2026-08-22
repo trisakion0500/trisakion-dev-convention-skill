@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execSync, execFileSync } = require('child_process');
 
 function getRepoRoot() {
@@ -108,15 +109,27 @@ function stripComment(line) {
     return line.replace(/\s*(#|(?<!:)\/\/).*$/, '');
 }
 
-// 이 스크립트 자신(및 npx skills update/심볼릭 링크 등으로 생긴 사본)을 식별하는 서명 —
+// 이 스크립트 자신(및 npx skills update/심볼릭 링크 등으로 생긴 사본)을 식별하기 위한 해시 —
 // 소비 프로젝트에서 이 파일 경로가 __filename과 다르게 잡히는 경우(심볼릭 링크, 대소문자 차이,
-// 스킬 캐시와 로컬 사본 이중 존재 등)에도 스캐너가 자기 셀프테스트 픽스처를 진짜 유출로 오판하지 않도록,
-// 경로 비교 대신 파일 내용 자체로 판별한다.
-const SELF_SIGNATURE = '// 이 스크립트는 SKILL.md 15장(커밋 전 크리덴셜 노출 방지)의 구현체다.';
+// 스킬 캐시와 로컬 사본 이중 존재 등)에도 스캐너가 자기 셀프테스트 픽스처를 진짜 유출로 오판하지 않도록
+// 경로 비교 대신 파일 "전체 내용"의 해시로 판별한다. 코멘트 한 줄 같은 리터럴 문자열을 판별 키로 쓰면
+// 그 문자열만 앞에 붙여 실제 크리덴셜을 숨기는 우회가 가능해지므로(공개 저장소라 문자열이 그대로 노출됨)
+// 반드시 파일 전체가 실행 중인 스크립트와 (줄바꿈 방식 차이를 제외하고) 바이트 단위로 일치해야만 인정한다.
+function normalizeForHash(buf) {
+    return buf.toString('utf8').replace(/\r\n/g, '\n');
+}
 
-function isSelfScript(filePath, buf) {
-    if (path.basename(filePath) !== 'pre-commit-privacy-scan.js') return false;
-    return buf.toString('utf8', 0, 500).includes(SELF_SIGNATURE);
+function computeSelfHash() {
+    try {
+        return crypto.createHash('sha256').update(normalizeForHash(fs.readFileSync(__filename))).digest('hex');
+    } catch {
+        return null; // __filename을 읽을 수 없으면 자기 자신 판별을 아예 하지 않는다(보수적으로 스캔 대상에 포함)
+    }
+}
+
+function isSelfScript(buf, selfHash) {
+    if (!selfHash) return false;
+    return crypto.createHash('sha256').update(normalizeForHash(buf)).digest('hex') === selfHash;
 }
 
 function isTemplateFile(filePath) {
@@ -257,6 +270,7 @@ function main() {
     checkGitignoreCoverage(repoRoot, violations);
 
     const staged = getStagedFiles(repoRoot);
+    const selfHash = computeSelfHash();
 
     for (const relPath of staged) {
         const absPath = path.join(repoRoot, relPath);
@@ -268,7 +282,7 @@ function main() {
             continue;
         }
         if (isBinary(buf)) continue;
-        if (isSelfScript(relPath, buf)) continue; // 자기 자신(또는 사본)의 셀프테스트 픽스처 오탐 방지
+        if (isSelfScript(buf, selfHash)) continue; // 자기 자신(또는 바이트 단위로 동일한 사본)의 셀프테스트 픽스처 오탐 방지
 
         const isTemplate = isTemplateFile(relPath);
         const isCodeFile = isCodeSourceFile(relPath);
@@ -341,21 +355,21 @@ function selfTest() {
     }
 
     // 이 스크립트를 커밋할 때 자기 자신의 셀프테스트 픽스처(가짜 커넥션 스트링/AWS 키 예시)를
-    // 진짜 유출로 오판하면 안 된다 — 경로가 아니라 파일 서명(첫 줄 주석)으로 판별한다(GM Platform 오탐 회귀 방지).
+    // 진짜 유출로 오판하면 안 된다 — 경로가 아니라 파일 전체 내용의 해시로 판별한다(GM Platform 오탐 회귀 방지).
+    // 동시에, 리터럴 주석 한 줄만 위조해 실제 크리덴셜을 숨기는 우회가 통하지 않는지도 함께 검증한다.
     {
-        const selfBuf = fs.readFileSync(__filename);
-        assert.strictEqual(isSelfScript('scripts/pre-commit-privacy-scan.js', selfBuf), true, '실제 경로로 읽은 자기 자신은 서명으로 식별해야 함');
-        assert.strictEqual(
-            isSelfScript('.claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js', selfBuf),
-            true,
-            '__filename과 다른 경로(스킬 캐시 사본 등)에 있어도 같은 파일명+서명이면 자기 자신으로 식별해야 함',
+        const selfHash = computeSelfHash();
+        assert.ok(selfHash, '실행 중인 스크립트 자신의 해시는 항상 계산 가능해야 함');
+        assert.strictEqual(isSelfScript(fs.readFileSync(__filename), selfHash), true, '자기 자신과 바이트 단위로 동일한 내용은 자기 자신으로 식별해야 함');
+
+        const crlfVariant = Buffer.from(fs.readFileSync(__filename, 'utf8').replace(/\n/g, '\r\n'));
+        assert.strictEqual(isSelfScript(crlfVariant, selfHash), true, '줄바꿈 방식만 다른 사본(CRLF 체크아웃 등)도 자기 자신으로 식별해야 함');
+
+        const forged = Buffer.from(
+            '#!/usr/bin/env node\n// 이 스크립트는 SKILL.md 15장(커밋 전 크리덴셜 노출 방지)의 구현체다.\n' +
+            "const uri = 'postgres://admin:Sup3r!Secret@10.20.30.40/prod';\n",
         );
-        assert.strictEqual(isSelfScript('scripts/other.js', selfBuf), false, '파일명이 다르면 서명이 같아도 자기 자신으로 취급하면 안 됨');
-        assert.strictEqual(
-            isSelfScript('scripts/pre-commit-privacy-scan.js', Buffer.from('const x = 1;')),
-            false,
-            '파일명이 같아도 서명 주석이 없으면 자기 자신으로 취급하면 안 됨',
-        );
+        assert.strictEqual(isSelfScript(forged, selfHash), false, '서명 주석만 위조하고 내용이 다른 파일은 자기 자신으로 인정하면 안 됨(스캔 우회 방지)');
     }
 
     console.log('pre-commit-privacy-scan self-test 통과.');

@@ -27,6 +27,7 @@ function isBinary(buf) {
 const DUMMY_WORDS = new Set([
     'changeme', 'change_me', 'xxx', 'todo', 'test', 'example', 'placeholder',
     'user', 'username', 'pass', 'password', 'secret', 'key', 'none', 'null',
+    '생략', '예시', '샘플',
 ]);
 
 // 코드 파일 확장자 — 이 안에서는 따옴표 없는 값이 문자열 리터럴일 수 없고 항상 식별자/표현식이다.
@@ -36,8 +37,12 @@ function isCodeSourceFile(filePath) {
     return CODE_FILE_EXT_RE.test(filePath);
 }
 
-// 식별자/프로퍼티 접근/짧은 함수 호출 형태 — env.db.password, config.dbPassword 같은 코드 참조를 인식한다.
-const IDENTIFIER_EXPR_RE = /^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*|\[[^\]]+\])*(?:\(\))?[,;)]?$/;
+// i18n 리소스 파일 — 값이 전부 화면에 노출되는 UI 문구라 크리덴셜이 실릴 수 있는 파일 종류가 아니다.
+const LOCALE_FILE_RE = /(^|[\\/])locales[\\/].*\.json$/i;
+
+function isLocaleFile(filePath) {
+    return LOCALE_FILE_RE.test(filePath);
+}
 
 function isSinglePlaceholder(rawValue, isCodeFile) {
     const trimmed = rawValue.trim();
@@ -51,9 +56,10 @@ function isSinglePlaceholder(rawValue, isCodeFile) {
     if (/^\d+(ms|s|m|h|d)$/i.test(value)) return true; // 시간 단위
     if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/.*)?$/i.test(value)) return true; // 로컬 URL
     if (/^(process\.env\.|import\.meta\.env\.|\$\{)/.test(value)) return true; // 코드 참조
-    // 코드 파일에서 원본 값이 따옴표로 시작하지 않으면 문자열 리터럴이 아니라 식별자/프로퍼티 접근이다
-    // (예: password: env.db.password). 따옴표로 감싸인 실제 문자열 리터럴은 이 분기를 타지 않는다.
-    if (isCodeFile && !/^['"]/.test(trimmed) && IDENTIFIER_EXPR_RE.test(value)) return true;
+    // 코드 파일에서 원본 값이 따옴표(', ", `)로 시작하지 않으면 문법상 문자열 리터럴일 수 없다 —
+    // 체이닝 호출/제네릭/함수 인자/유니온 타입 등 어떤 표현식이든 코드 참조이므로 안전하다.
+    // 따옴표로 감싸인 실제 문자열 리터럴만 이 분기를 건너뛰어 아래에서 위반으로 남는다.
+    if (isCodeFile && !/^['"`]/.test(trimmed)) return true;
     return false;
 }
 
@@ -85,11 +91,14 @@ const KV_LINE_RE = /^\s*(?:export\s+)?["']?([A-Za-z0-9_.\-]+)["']?\s*[:=]\s*(.+?
 // 15.1-4의 공인 IP 리터럴 — 예외(사설 대역/루프백)는 통과시킨다.
 const IPV4_RE = /\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g;
 
-function isExemptIp(a, b) {
+function isExemptIp(a, b, c) {
     if (a === 127 || a === 0) return true; // loopback / 0.0.0.0
     if (a === 10) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
+    if (a === 192 && b === 0 && c === 2) return true; // TEST-NET-1 (RFC 5737)
+    if (a === 198 && b === 51 && c === 100) return true; // TEST-NET-2 (RFC 5737)
+    if (a === 203 && b === 0 && c === 113) return true; // TEST-NET-3 (RFC 5737)
     return false;
 }
 
@@ -152,7 +161,7 @@ function scanLine(filePath, lineNo, rawLine, isTemplate, isCodeFile, violations)
     while ((ipMatch = IPV4_RE.exec(line)) !== null) {
         const octets = ipMatch.slice(1, 5).map(Number);
         if (octets.some((n) => n > 255)) continue; // IP 형태가 아닌 숫자 나열
-        if (isExemptIp(octets[0], octets[1])) continue;
+        if (isExemptIp(octets[0], octets[1], octets[2])) continue;
         violations.push({ filePath, lineNo, message: `공인 IP로 보이는 리터럴(${ipMatch[0]})` });
     }
 }
@@ -235,6 +244,7 @@ function main() {
     const staged = getStagedFiles(repoRoot).filter((f) => f !== selfPath);
 
     for (const relPath of staged) {
+        if (isLocaleFile(relPath)) continue;
         const absPath = path.join(repoRoot, relPath);
         if (!fs.existsSync(absPath)) continue; // 삭제된 파일 등
         let buf;
@@ -248,7 +258,7 @@ function main() {
         const isTemplate = isTemplateFile(relPath);
         const isCodeFile = isCodeSourceFile(relPath);
         const text = buf.toString('utf8');
-        const lines = text.split('\n');
+        const lines = text.split(/\r?\n/); // CRLF에서도 stripComment의 `.*$`가 trailing \r에 막히지 않게 함
         lines.forEach((line, idx) => scanLine(relPath, idx + 1, line, isTemplate, isCodeFile, violations));
     }
 
@@ -273,6 +283,21 @@ function selfTest() {
     assert.strictEqual(isSinglePlaceholder('env.logDb.password', true), true, '코드 파일의 프로퍼티 접근은 안전해야 함');
     assert.strictEqual(isSinglePlaceholder('"realSecret123"', true), false, '따옴표로 감싼 리터럴은 여전히 위반이어야 함 — 코드 문법상 문자열 리터럴은 항상 따옴표로 감싸이므로 이걸로 리터럴/식별자를 구분한다');
     assert.strictEqual(isSinglePlaceholder('env.db.password', false), false, '코드 파일이 아니면(.env 등) 이 예외를 적용하면 안 됨 — 이런 파일에서는 따옴표 없는 값도 실제 리터럴이다');
+    assert.strictEqual(isSinglePlaceholder("configService.get<string>('DB_PASSWORD'),", true), true, '제네릭+인자 있는 함수 호출도 코드 참조로 인식해야 함');
+    assert.strictEqual(isSinglePlaceholder('string | null;', true), true, '유니온 타입도 코드 참조로 인식해야 함');
+    assert.strictEqual(isSinglePlaceholder('`sk_live_${x}`', true), false, '백틱 템플릿 리터럴은 여전히 문자열 리터럴로 취급해 위반이어야 함');
+
+    const [crlfLine] = '  api_secret: string; // 암호문\r\nnext'.split(/\r?\n/);
+    assert.strictEqual(stripComment(crlfLine), '  api_secret: string;', 'CRLF 파일도 split(/\\r?\\n/)로 줄 끝 \\r를 미리 제거해야 stripComment가 정상 동작함');
+
+    assert.strictEqual(isExemptIp(203, 0, 113), true, 'RFC 5737 TEST-NET-3는 문서 예시용이라 예외여야 함');
+    assert.strictEqual(isExemptIp(192, 0, 2), true, 'RFC 5737 TEST-NET-1도 예외여야 함');
+    assert.strictEqual(isExemptIp(198, 51, 100), true, 'RFC 5737 TEST-NET-2도 예외여야 함');
+    assert.strictEqual(isExemptIp(203, 0, 114), false, 'TEST-NET-3 대역을 벗어나면 여전히 공인 IP로 판정해야 함');
+
+    assert.strictEqual(isSinglePlaceholder('생략', false), true, '한국어 플레이스홀더 관용구도 인식해야 함');
+    assert.strictEqual(isLocaleFile('frontend/src/locales/ko/common.json'), true, 'locales/ 하위 json은 i18n 리소스 파일로 인식해야 함');
+    assert.strictEqual(isLocaleFile('frontend/src/config/common.json'), false, 'locales/ 밖의 json은 그대로 스캔 대상이어야 함');
     console.log('pre-commit-privacy-scan self-test 통과.');
 }
 

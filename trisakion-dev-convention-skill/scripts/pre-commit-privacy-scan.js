@@ -108,6 +108,17 @@ function stripComment(line) {
     return line.replace(/\s*(#|(?<!:)\/\/).*$/, '');
 }
 
+// 이 스크립트 자신(및 npx skills update/심볼릭 링크 등으로 생긴 사본)을 식별하는 서명 —
+// 소비 프로젝트에서 이 파일 경로가 __filename과 다르게 잡히는 경우(심볼릭 링크, 대소문자 차이,
+// 스킬 캐시와 로컬 사본 이중 존재 등)에도 스캐너가 자기 셀프테스트 픽스처를 진짜 유출로 오판하지 않도록,
+// 경로 비교 대신 파일 내용 자체로 판별한다.
+const SELF_SIGNATURE = '// 이 스크립트는 SKILL.md 15장(커밋 전 크리덴셜 노출 방지)의 구현체다.';
+
+function isSelfScript(filePath, buf) {
+    if (path.basename(filePath) !== 'pre-commit-privacy-scan.js') return false;
+    return buf.toString('utf8', 0, 500).includes(SELF_SIGNATURE);
+}
+
 function isTemplateFile(filePath) {
     if (/(^|[\\/])\.env\.(example|sample)$/i.test(filePath)) return true;
     if (/(^|[\\/])\.mcp\.json\.sample$/i.test(filePath)) return true;
@@ -245,8 +256,7 @@ function main() {
 
     checkGitignoreCoverage(repoRoot, violations);
 
-    const selfPath = path.relative(repoRoot, __filename).split(path.sep).join('/');
-    const staged = getStagedFiles(repoRoot).filter((f) => f !== selfPath);
+    const staged = getStagedFiles(repoRoot);
 
     for (const relPath of staged) {
         const absPath = path.join(repoRoot, relPath);
@@ -258,6 +268,7 @@ function main() {
             continue;
         }
         if (isBinary(buf)) continue;
+        if (isSelfScript(relPath, buf)) continue; // 자기 자신(또는 사본)의 셀프테스트 픽스처 오탐 방지
 
         const isTemplate = isTemplateFile(relPath);
         const isCodeFile = isCodeSourceFile(relPath);
@@ -327,6 +338,24 @@ function selfTest() {
         const v2 = [];
         scanLine('frontend/src/locales/ko/common.json', 2, '  "leaked": "AKIAABCDEFGHIJKLMNOP",', false, false, true, v2);
         assert.ok(v2.some((x) => x.message.includes('AWS')), 'locale 파일이어도 AWS 키 같은 구조적 패턴은 계속 잡아야 함');
+    }
+
+    // 이 스크립트를 커밋할 때 자기 자신의 셀프테스트 픽스처(가짜 커넥션 스트링/AWS 키 예시)를
+    // 진짜 유출로 오판하면 안 된다 — 경로가 아니라 파일 서명(첫 줄 주석)으로 판별한다(GM Platform 오탐 회귀 방지).
+    {
+        const selfBuf = fs.readFileSync(__filename);
+        assert.strictEqual(isSelfScript('scripts/pre-commit-privacy-scan.js', selfBuf), true, '실제 경로로 읽은 자기 자신은 서명으로 식별해야 함');
+        assert.strictEqual(
+            isSelfScript('.claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js', selfBuf),
+            true,
+            '__filename과 다른 경로(스킬 캐시 사본 등)에 있어도 같은 파일명+서명이면 자기 자신으로 식별해야 함',
+        );
+        assert.strictEqual(isSelfScript('scripts/other.js', selfBuf), false, '파일명이 다르면 서명이 같아도 자기 자신으로 취급하면 안 됨');
+        assert.strictEqual(
+            isSelfScript('scripts/pre-commit-privacy-scan.js', Buffer.from('const x = 1;')),
+            false,
+            '파일명이 같아도 서명 주석이 없으면 자기 자신으로 취급하면 안 됨',
+        );
     }
 
     console.log('pre-commit-privacy-scan self-test 통과.');

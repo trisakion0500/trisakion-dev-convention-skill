@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 610" font-family="sans-serif">
+<title>Agent Router 흐름 — diff 기반 후보 추천과 사용자 확인</title>
+<desc>trisakion-agent-router의 실행 흐름. diff 범위를 결정한 뒤 경로/키워드 기반으로 1차 후보를 넓게 잡고, diff 내용을 대조해 2차로 오탐을 제거한다. 후보가 0개면 선택 UI 없이 안내만 하고 종료한다. 후보가 있으면 AskUserQuestion으로 제시하고, 사용자가 선택하거나 취소한다. 사용자가 하나 이상 선택한 경우에만 선택된 에이전트를 Agent 도구로 순차 호출한다.</desc>
+<rect x="0" y="0" width="580" height="610" fill="#FFFFFF"/>
+
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#5F5E5A"/>
+  </marker>
+</defs>
+
+<!-- 메인 흐름 -->
+<line x1="440" y1="76" x2="440" y2="110" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
+<line x1="440" y1="166" x2="440" y2="200" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
+
+<!-- 2차 정밀 판단 -> 후보 0개 / 후보 제시 분기 -->
+<line x1="440" y1="256" x2="120" y2="300" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="185" y="282" font-size="12" fill="#5F5E5A">후보 0개</text>
+<line x1="440" y1="256" x2="440" y2="300" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="450" y="282" font-size="12" fill="#5F5E5A">후보 ≥ 1개</text>
+
+<!-- 후보 제시 -> 사용자 선택 -->
+<line x1="440" y1="356" x2="440" y2="400" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
+
+<!-- 사용자 선택 -> 선택 안함 / 순차 실행 분기 -->
+<line x1="440" y1="456" x2="120" y2="500" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="165" y="482" font-size="12" fill="#5F5E5A">취소 / 미선택</text>
+<line x1="440" y1="456" x2="440" y2="500" stroke="#5F5E5A" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="450" y="482" font-size="12" fill="#5F5E5A">1개 이상 선택</text>
+
+<!-- 1. diff 결정 -->
+<rect x="340" y="20" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="352" y="44" font-size="14" font-weight="500" fill="#085041">diff 결정</text>
+<text x="352" y="62" font-size="12" fill="#085041">--staged 또는 지정 커밋 범위</text>
+
+<!-- 2. 1차 후보 필터링 -->
+<rect x="340" y="110" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="352" y="134" font-size="14" font-weight="500" fill="#085041">1차 후보 필터링</text>
+<text x="352" y="152" font-size="12" fill="#085041">경로/키워드 기반 · 오탐 허용</text>
+
+<!-- 3. 2차 정밀 판단 -->
+<rect x="340" y="200" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="352" y="224" font-size="14" font-weight="500" fill="#085041">2차 정밀 판단</text>
+<text x="352" y="242" font-size="12" fill="#085041">diff 내용 대조로 오탐 제거</text>
+
+<!-- 4a. 후보 0개 (종료) -->
+<rect x="20" y="300" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="32" y="324" font-size="14" font-weight="500" fill="#085041">후보 0개</text>
+<text x="32" y="342" font-size="12" fill="#085041">선택 UI 없이 안내 후 종료</text>
+
+<!-- 4b. 후보 제시 -->
+<rect x="340" y="300" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="352" y="324" font-size="14" font-weight="500" fill="#085041">후보 제시</text>
+<text x="352" y="342" font-size="12" fill="#085041">AskUserQuestion 멀티 선택</text>
+
+<!-- 5. 사용자 선택 (사용자 결정 지점) -->
+<rect x="340" y="400" width="200" height="56" rx="8" fill="#FCEBEB" stroke="#A32D2D"/>
+<text x="352" y="424" font-size="14" font-weight="500" fill="#791F1F">사용자 선택</text>
+<text x="352" y="442" font-size="12" fill="#791F1F">후보 / 전체 실행 / 취소</text>
+
+<!-- 6a. 선택 안 함 (종료) -->
+<rect x="20" y="500" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="32" y="524" font-size="14" font-weight="500" fill="#085041">선택 안 함</text>
+<text x="32" y="542" font-size="12" fill="#085041">아무 에이전트도 호출 안 함</text>
+
+<!-- 6b. 순차 실행 -->
+<rect x="340" y="500" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="352" y="524" font-size="14" font-weight="500" fill="#085041">순차 실행</text>
+<text x="352" y="542" font-size="12" fill="#085041">선택된 에이전트만 Agent 호출</text>
+
+<!-- 범례 -->
+<rect x="20" y="580" width="16" height="16" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="44" y="592" font-size="12" fill="#444441">에이전트/실행 주체 (router 자체 처리)</text>
+
+<rect x="330" y="580" width="16" height="16" rx="3" fill="#FCEBEB" stroke="#A32D2D"/>
+<text x="354" y="592" font-size="12" fill="#444441">사용자 결정 지점</text>
+</svg>

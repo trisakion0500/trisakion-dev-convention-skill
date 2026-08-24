@@ -3,6 +3,28 @@
 개발 컨벤션(SP/동시성/보안 설계 원칙)을 Claude Code 스킬로 구조화하고,
 그 컨벤션을 코드에 자동으로 강제하는 검증 서브에이전트를 붙인 프로젝트.
 
+## 요약
+
+- 한 줄 설명: 개발 컨벤션(SP·동시성·보안) 문서를 실행 시점마다 직접 읽어 코드를 판정하는 검증 서브에이전트 세트.
+- 핵심 구성: 검증 서브에이전트 5개(SP 컨벤션 / 테이블 잠금순서 / 레이스 컨디션 / 배치 라이프사이클 / 보안) + diff 기반 추천 라우터 1개 + husky pre-commit 크리덴셜 스캔(LLM 미사용, 커밋마다 강제 실행).
+- 실전 검증: [GM Platform](https://github.com/trisakion0500/gm-platform)·[Coupon Platform](https://github.com/trisakion0500/coupon_platform)에 적용 중이며, GM Platform에서 SUPER_ADMIN 권한 우회 Function을 포함한 여러 건의 실제 컨벤션 위반을 발견·수정했다.
+- 상태: 서브에이전트 6개·크리덴셜 스캐너 모두 완성 단계 (자세한 상태는 [서브에이전트](#서브에이전트) 표 참고).
+
+## 목차
+
+- [요약](#요약)
+- [왜 만들었나](#왜-만들었나)
+- [다루는 범위](#다루는-범위)
+- [기술적 도전과 해결](#기술적-도전과-해결)
+- [설치](#설치)
+- [서브에이전트](#서브에이전트)
+- [커밋 전 크리덴셜 스캔](#커밋-전-크리덴셜-스캔-pre-commit-hook)
+- [설계 원칙](#설계-원칙)
+- [업데이트](#업데이트)
+- [적용 중인 프로젝트](#적용-중인-프로젝트)
+- [한계 및 개선 과제](#한계-및-개선-과제)
+- [라이선스](#라이선스)
+
 ## 왜 만들었나
 
 컨벤션 문서는 대부분 "지켜지길 바라는 문서"로 끝난다. 이 저장소는 그 문서를
@@ -24,6 +46,75 @@ SUPER_ADMIN 권한 우회 Function들이 앱이 전달한 role_code를 재검증
 - 코드 모듈화, TypeScript 에러 처리(ERROR_MAP + BusinessException), 의존성 버전 관리
 - 보안 — S2S HMAC 인증, SQL Injection 방지, 비밀번호 저장, XSS/CSRF/httpOnly 쿠키,
   외부 diff/PR 프롬프트 인젝션 방지
+
+## 기술적 도전과 해결
+
+### 1. 문서-코드 드리프트
+
+- **문제** — 컨벤션 문서는 대부분 "지켜지길 바라는 문서"로 끝난다. 검증 로직을 별도로 짜면 문서가 바뀔 때 검증 로직이 따라 바뀌지 않아 곧 서로 어긋난다.
+- **왜 어려웠는가** — 가장 손쉬운 구현은 SKILL.md의 규칙 문구를 각 에이전트 파일에 그대로 복사해 넣는 것이다. 하지만 그러면 SKILL.md 4장이 리팩터링될 때마다 5개 에이전트 파일을 전부 손으로 동기화해야 하고, 하나라도 놓치면 검증 기준이 조용히 낡은 문서를 참조하게 된다.
+- **어떻게 해결했는가** — 단일 출처 원칙. 에이전트 파일에는 규칙 문구를 절대 복제하지 않고 "무엇을(어느 절을) 검증할지"만 남긴다. 실행될 때마다 `Glob`/`Read`로 SKILL.md 해당 절을 직접 읽어 그 원문을 판정 기준으로 삼는다.
+- **결과** — GM Platform 실전 적용에서 SUPER_ADMIN 권한 우회 Function(앱이 전달한 role_code를 재검증 없이 신뢰)을 포함해 여러 건을 발견·수정했다.
+
+<img src="docs/svg/single_source_structure.svg" width="700" alt="SKILL.md를 중심으로 5개 검증 서브에이전트와 agent-router가 실행 시점마다 Glob/Read로 원문을 직접 읽고, pre-commit-privacy-scan.js는 별도 경로로 15장 기준을 코드에 구현해 실행 시점에 재참조하지 않는 단일 출처 구조 다이어그램">
+
+```
+$ /trisakion-spv
+
+## SP Convention 검증 결과
+(기준: SKILL.md .claude/skills/trisakion-dev-convention-skill/SKILL.md, 4장 / 범위: 변경분 3개 파일)
+
+### 🔴 위반 (수정 필요)
+- `db/main/functions/FN_CHECK_PROJECT_ACCESS.sql:22`
+  - [4.2] SP가 앱에서 전달받은 role_code를 재검증 없이 그대로 신뢰
+  - 현재: IF i_role_code >= 90 THEN ...
+  - 제안: FN_GET_PROJECT_ROLE_CODE(i_requester_user_id, i_project_id)로 DB에서 직접 재조회해 비교
+
+### 요약
+검사 대상 1개 DB / 3개 파일 / 위반 1건 / 의심 0건
+```
+> (가상 데이터 — 실제 리포트 출력 형식 예시)
+
+### 2. pre-commit 스캐너의 자기 자신 식별
+
+- **문제** — 크리덴셜 스캐너 자신의 회귀 테스트 코드 안에는 가짜 커넥션 스트링·AWS 키 예시가 픽스처로 심어져 있다. 스캐너가 자기 자신을 스캔하면 이걸 진짜 유출로 오판한다.
+- **왜 어려웠는가** — 처음엔 `git diff` 경로 문자열 비교로 자기 자신을 스캔 대상에서 제외했는데, GM Platform 적용 중 이 스크립트가 심볼릭 링크·스킬 캐시 사본 등 실행 경로와 다른 위치에 존재할 때 식별에 실패하는 사례가 나왔다. 다음 시도로 파일 첫머리 주석의 리터럴 문자열을 판별 키로 썼지만, 공개 저장소라 그 문자열이 그대로 노출돼 있어 다른 파일 앞에 같은 주석 한 줄만 붙이면 스캔을 위조로 우회할 수 있다는 지적을 받았다.
+- **어떻게 해결했는가** — 실행 중인 스크립트(`__filename`) 전체 내용의 SHA-256 해시로 판별하도록 교체했다. 줄바꿈 방식(LF/CRLF) 차이는 정규화한 뒤 비교한다.
+- **결과** — 실행 경로에 의존하지 않고 어디서 실행되든 동일하게 자기 자신을 식별하며, 판별 키가 위조 가능한 리터럴이 아니라 파일 전체 내용이라 우회할 수 없다.
+
+```
+$ node scripts/pre-commit-privacy-scan.js
+🔴 커밋 전 크리덴셜 스캔 실패
+
+.claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js
+  → 자기 참조 판별: SHA-256 일치 확인, 스캔 제외
+
+test-secret.txt:1
+  → API_SECRET=sk_live_1234567890abcdef1234567890 (크리덴셜 리터럴)
+
+커밋을 거부합니다. 위반 항목을 수정한 뒤 다시 시도하세요.
+```
+> (가상 데이터 — 실제 리포트 출력 형식 예시)
+
+### 3. 대량 파일 스캔 시 패턴 대조 누락
+
+- **문제** — SP Convention Validator의 권한체크 패턴(4.2절) 검증은 서로 다른 파일에 반복되는 조건절을 찾아 대조해야 한다.
+- **왜 어려웠는가** — "파일을 한 번 훑으며 기억해뒀다가 나중에 비교"하는 방식은 검사 대상 파일 수가 늘어날수록(대략 20개 이상) 신뢰할 수 없다는 게 실측으로 확인됐다 — LLM이 앞서 읽은 파일의 패턴을 뒤에서 놓치는 누락이 실제로 발생했다.
+- **어떻게 해결했는가** — 추출 → 목록화 → 대조 3단계를 명시적 절차로 강제했다. ① 각 SP를 읽으며 권한/스코핑 조건절을 파일:라인과 함께 목록으로 뽑고, ② 목록을 나란히 놓고 파라미터 구성·비교 로직이 동일한 것이 2회 이상인지 하나씩 대조하고, ③ 반복이 확인되면 위반으로 표시한다.
+- **결과** — 파일 개수가 늘어나도 반복 패턴 누락 없이 대조된다.
+
+```
+$ /trisakion-spv db/main/procedures/
+
+### 4. 권한 체크 패턴 (4.2) — 추출 단계
+- SP_COUPON_RESERVE.sql:18  → project_id IN (SELECT project_id FROM user_project WHERE user_id = i_requester_user_id)
+- SP_COUPON_CANCEL.sql:15   → project_id IN (SELECT project_id FROM user_project WHERE user_id = i_requester_user_id)
+- SP_COUPON_ISSUE.sql:20    → project_id IN (SELECT project_id FROM user_project WHERE user_id = i_requester_user_id)
+
+### 대조 단계
+- 3개 파일에서 동일 조건절 반복 확인 → 🔴 위반: FN_CHECK_PROJECT_ACCESS로 분리 필요
+```
+> (가상 데이터 — 실제 리포트 출력 형식 예시)
 
 ## 설치
 
@@ -55,6 +146,8 @@ rm -rf "$tdcs_dir"
 | `trisakion-batch-lifecycle-auditor` | ✅ 완성 | SKILL.md 5.1/5.2/5.3/7.4절 (배치 인스턴스 중복실행·정상종료 훅·시스템 행위자 sentinel·로그 파일명 인스턴스 suffix) | `/trisakion-batch` |
 | `trisakion-security-audit-agent` | ✅ 완성 | SKILL.md 14.1/14.2/14.3/14.4절 (S2S HMAC 인증·SQLi·비밀번호 저장·XSS/CSRF/httpOnly 쿠키) | `/trisakion-sec` |
 | `trisakion-agent-router` | ✅ 완성 | 자체 판정 기준 없음 — diff 내용을 보고 위 다섯 에이전트 중 필요한 것만 추천·오케스트레이션 | `/trisakion-route` |
+
+<img src="docs/svg/router_flow.svg" width="700" alt="Agent Router가 diff 범위를 결정하고 1차 후보 필터링, 2차 정밀 판단을 거쳐 후보를 제시한 뒤, 사용자가 선택하면 선택된 에이전트만 순차 호출하는 흐름도. 후보 0개이거나 사용자가 취소하면 선택 UI 없이 종료된다">
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)
 
@@ -175,6 +268,13 @@ rm -rf "$tdcs_dir"
 
 - [GM Platform](https://github.com/trisakion0500/gm-platform) — MCP/RAG 기반 GM 툴 플랫폼
 - [Coupon Platform](https://github.com/trisakion0500/coupon_platform) — SP-only 쿠폰 발급 플랫폼
+
+## 한계 및 개선 과제
+
+- **CI 자동 실행 미지원** — 5개 검증 서브에이전트는 모두 슬래시 커맨드로 수동 호출해야 한다(저장소에 `.github/workflows` 자체가 없음). PR 파이프라인에 연결된 자동 실행은 아직 없다. 매 커밋마다 자동으로 도는 건 pre-commit 크리덴셜 스캐너뿐이다.
+- **SP/Function 컨벤션은 MySQL 특화** — RESULT 반환 규약(4.4)이 `SIGNAL`, `GET DIAGNOSTICS`, `DECLARE EXIT HANDLER FOR SQLEXCEPTION` 등 MySQL 문법을 전제로 한다. PostgreSQL 등 다른 DBMS나 Python/Go 등 SQL 이외 언어로의 일반화는 다루지 않는다.
+- **멱등성 검증의 명시적 한계** — 멱등 판단 키가 하나의 요청을 유일하게 식별하지 못하는 경우(같은 키로 정당하게 여러 번 호출될 수 있는 경우), 레이스 컨디션 체커는 재시도와 정당한 반복을 구분할 수 없어 위반으로 판정하지 않고 스킵한다(SKILL.md 6.1).
+- **크리덴셜 스캔은 히스토리를 보지 않음** — pre-commit 훅은 워킹트리/스테이징만 검사한다. 과거 커밋에 이미 노출된 시크릿은 이 훅으로 잡히지 않고 키 로테이션과 히스토리 재작성이 별도로 필요하다(SKILL.md 15.3/15.4).
 
 ## 라이선스
 

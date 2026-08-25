@@ -56,7 +56,7 @@ SUPER_ADMIN 권한 우회 Function들이 앱이 전달한 role_code를 재검증
 - **어떻게 해결했는가** — 단일 출처 원칙. 에이전트 파일에는 규칙 문구를 절대 복제하지 않고 "무엇을(어느 절을) 검증할지"만 남긴다. 실행될 때마다 `Glob`/`Read`로 SKILL.md 해당 절을 직접 읽어 그 원문을 판정 기준으로 삼는다.
 - **결과** — GM Platform 실전 적용에서 SUPER_ADMIN 권한 우회 Function(앱이 전달한 role_code를 재검증 없이 신뢰)을 포함해 여러 건을 발견·수정했다.
 
-<img src="docs/svg/single_source_structure.svg" width="830" alt="SKILL.md를 중심으로 6개 검증 서브에이전트와 agent-router가 실행 시점마다 Glob/Read로 원문을 직접 읽고, pre-commit-privacy-scan.js는 별도 경로로 15장 기준을 코드에 구현해 실행 시점에 재참조하지 않는 단일 출처 구조 다이어그램">
+<img src="docs/svg/single_source_structure.svg" width="1000" alt="SKILL.md를 중심으로 6개 검증 서브에이전트와 agent-router가 실행 시점마다 Glob/Read로 원문을 직접 읽고, pre-commit-privacy-scan.js는 별도 경로로 15장 기준을 코드에 구현해 실행 시점에 재참조하지 않는 단일 출처 구조 다이어그램">
 
 ```
 $ /trisakion-spv

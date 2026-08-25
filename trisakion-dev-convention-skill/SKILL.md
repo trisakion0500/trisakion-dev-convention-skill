@@ -394,7 +394,8 @@ throw new BusinessException(ResultCode.PROJECT_NOT_FOUND);
 ### 16.1 네이밍/타입
 
 - 테이블명은 단수형 snake_case로 짓는다(`api`, `code_group`, `user_role` 등 — 다대다/이력성 조인 테이블도 복수형이 아니라 단수 명사 조합으로 짓는다).
-- PK는 기본적으로 `{table}_id` 단일 surrogate key이며 `BIGINT UNSIGNED NOT NULL AUTO_INCREMENT`로 둔다. 예외: 순수 M:N 매핑(junction) 테이블이면서 ①이 테이블의 단일 행을 FK로 참조하는 다른 테이블이 전혀 없고 ②구성 컬럼들의 조합 자체가 관계의 완전한 자연키(추가 속성 없이 유일성이 성립)인 경우는 복합 PK(예: `PRIMARY KEY (user_id, project_id)`)를 예외로 인정한다 — 이 경우 테이블 헤더 박스 주석에 "의도적 복합 PK" 사유를 명시한다.
+- PK는 기본적으로 `{table}_id` 단일 surrogate key이며 `BIGINT UNSIGNED NOT NULL AUTO_INCREMENT`로 둔다. 단, 행 수가 적을 것으로 예상되는 참조성 테이블(예: 코드 그룹)은 `INT UNSIGNED NOT NULL AUTO_INCREMENT`도 허용한다 — 이 경우 그 테이블을 FK로 참조하는 컬럼들도 동일하게 `INT UNSIGNED`로 맞춘다.
+- PK 예외: 순수 M:N 매핑(junction) 테이블이면서 ①이 테이블의 단일 행을 FK로 참조하는 다른 테이블이 전혀 없고 ②구성 컬럼들의 조합 자체가 관계의 완전한 자연키(추가 속성 없이 유일성이 성립)인 경우는 복합 PK(예: `PRIMARY KEY (user_id, project_id)`)를 예외로 인정한다 — 이 경우 테이블 헤더 박스 주석에 "의도적 복합 PK" 사유를 명시한다.
 - FK 컬럼명은 참조하는 테이블의 PK명을 그대로 따른다(`project_id`가 `project.project_id`를 참조). 단, "행위자"(이 행을 누가 만들었는지 등)를 가리키는 컬럼은 참조 테이블명이 아니라 역할 이름으로 짓는다(`created_by`/`updated_by`/`request_user_id`/`approve_user_id`가 전부 `user.user_id`를 참조) — 이 경우도 타입은 참조 대상 PK와 동일(`BIGINT UNSIGNED`)해야 한다.
 - 상태/구분값 컬럼은 `TINYINT UNSIGNED`로 두고, 코드→의미 매핑을 컬럼 `COMMENT`에 반드시 함께 적는다(예: `상태 (1:사용, 0:중지)`) — 별도 코드 테이블을 두지 않는다.
 - `created_at`/`updated_at`은 `DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`(`updated_at`은 `ON UPDATE CURRENT_TIMESTAMP`를 추가)로 통일한다. **Append-Only 테이블(INSERT만 발생하고 이후 UPDATE/DELETE가 전혀 없는 테이블 — 예: 감사 로그)만** `updated_at` 자체를 생략할 수 있다. 판단 기준은 "물리적으로 로그 DB에 있는지"가 아니라 "실제로 UPDATE/DELETE가 전혀 없는지"다 — 재시도 시 컬럼을 갱신하거나 성공 시 행을 삭제하는 큐/아웃박스 테이블은 로그 DB에 물리적으로 같이 있어도(예: 원자성 확보를 위해 감사 로그 테이블과 같은 DB에 둔 경우) 이 예외에 해당하지 않는다.

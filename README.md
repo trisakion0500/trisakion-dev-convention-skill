@@ -6,9 +6,9 @@
 ## 요약
 
 - 한 줄 설명: 개발 컨벤션(SP·동시성·보안) 문서를 실행 시점마다 직접 읽어 코드를 판정하는 검증 서브에이전트 세트.
-- 핵심 구성: 검증 서브에이전트 5개(SP 컨벤션 / 테이블 잠금순서 / 레이스 컨디션 / 배치 라이프사이클 / 보안) + diff 기반 추천 라우터 1개 + husky pre-commit 크리덴셜 스캔(LLM 미사용, 커밋마다 강제 실행).
+- 핵심 구성: 검증 서브에이전트 6개(SP 컨벤션 / 테이블 DDL 컨벤션 / 테이블 잠금순서 / 레이스 컨디션 / 배치 라이프사이클 / 보안) + diff 기반 추천 라우터 1개 + husky pre-commit 크리덴셜 스캔(LLM 미사용, 커밋마다 강제 실행).
 - 실전 검증: [GM Platform](https://github.com/trisakion0500/gm-platform)·[Coupon Platform](https://github.com/trisakion0500/coupon_platform)에 적용 중이며, GM Platform에서 SUPER_ADMIN 권한 우회 Function을 포함한 여러 건의 실제 컨벤션 위반을 발견·수정했다.
-- 상태: 서브에이전트 6개·크리덴셜 스캐너 모두 완성 단계 (자세한 상태는 [서브에이전트](#서브에이전트) 표 참고).
+- 상태: 서브에이전트 7개·크리덴셜 스캐너 모두 완성 단계 (자세한 상태는 [서브에이전트](#서브에이전트) 표 참고).
 
 ## 목차
 
@@ -52,11 +52,11 @@ SUPER_ADMIN 권한 우회 Function들이 앱이 전달한 role_code를 재검증
 ### 1. 문서-코드 드리프트
 
 - **문제** — 컨벤션 문서는 대부분 "지켜지길 바라는 문서"로 끝난다. 검증 로직을 별도로 짜면 문서가 바뀔 때 검증 로직이 따라 바뀌지 않아 곧 서로 어긋난다.
-- **왜 어려웠는가** — 가장 손쉬운 구현은 SKILL.md의 규칙 문구를 각 에이전트 파일에 그대로 복사해 넣는 것이다. 하지만 그러면 SKILL.md 4장이 리팩터링될 때마다 5개 에이전트 파일을 전부 손으로 동기화해야 하고, 하나라도 놓치면 검증 기준이 조용히 낡은 문서를 참조하게 된다.
+- **왜 어려웠는가** — 가장 손쉬운 구현은 SKILL.md의 규칙 문구를 각 에이전트 파일에 그대로 복사해 넣는 것이다. 하지만 그러면 SKILL.md 절이 리팩터링될 때마다 6개 에이전트 파일을 전부 손으로 동기화해야 하고, 하나라도 놓치면 검증 기준이 조용히 낡은 문서를 참조하게 된다.
 - **어떻게 해결했는가** — 단일 출처 원칙. 에이전트 파일에는 규칙 문구를 절대 복제하지 않고 "무엇을(어느 절을) 검증할지"만 남긴다. 실행될 때마다 `Glob`/`Read`로 SKILL.md 해당 절을 직접 읽어 그 원문을 판정 기준으로 삼는다.
 - **결과** — GM Platform 실전 적용에서 SUPER_ADMIN 권한 우회 Function(앱이 전달한 role_code를 재검증 없이 신뢰)을 포함해 여러 건을 발견·수정했다.
 
-<img src="docs/svg/single_source_structure.svg" width="700" alt="SKILL.md를 중심으로 5개 검증 서브에이전트와 agent-router가 실행 시점마다 Glob/Read로 원문을 직접 읽고, pre-commit-privacy-scan.js는 별도 경로로 15장 기준을 코드에 구현해 실행 시점에 재참조하지 않는 단일 출처 구조 다이어그램">
+<img src="docs/svg/single_source_structure.svg" width="700" alt="SKILL.md를 중심으로 6개 검증 서브에이전트와 agent-router가 실행 시점마다 Glob/Read로 원문을 직접 읽고, pre-commit-privacy-scan.js는 별도 경로로 15장 기준을 코드에 구현해 실행 시점에 재참조하지 않는 단일 출처 구조 다이어그램">
 
 ```
 $ /trisakion-spv
@@ -141,17 +141,18 @@ rm -rf "$tdcs_dir"
 | 서브에이전트 | 상태 | 검증 기준 | 커맨드 |
 |---|---|---|---|
 | `trisakion-sp-convention-validator` | ✅ 완성 | SKILL.md 4장 (SP/Function 컨벤션) | `/trisakion-spv` |
+| `trisakion-table-convention-validator` | ✅ 완성 | SKILL.md 16장 (테이블 DDL 컨벤션 — 네이밍/타입·PK/인덱스/FK·코멘트/포맷) | `/trisakion-tcv` |
 | `trisakion-table-lock-order-auditor` | ✅ 완성 | 프로젝트별 `TABLE_LOCK_ORDER.md` 대비 SP 실제 락 순서 일치 여부 (SKILL.md 4.7) | `/trisakion-lock` |
 | `trisakion-race-condition-checker` | ✅ 완성 | SKILL.md 5장 본문/6.1절 (동시성·멱등성·상태전이 3관점) | `/trisakion-race` |
 | `trisakion-batch-lifecycle-auditor` | ✅ 완성 | SKILL.md 5.1/5.2/5.3/7.4절 (배치 인스턴스 중복실행·정상종료 훅·시스템 행위자 sentinel·로그 파일명 인스턴스 suffix) | `/trisakion-batch` |
 | `trisakion-security-audit-agent` | ✅ 완성 | SKILL.md 14.1/14.2/14.3/14.4절 (S2S HMAC 인증·SQLi·비밀번호 저장·XSS/CSRF/httpOnly 쿠키) | `/trisakion-sec` |
-| `trisakion-agent-router` | ✅ 완성 | 자체 판정 기준 없음 — diff 내용을 보고 위 다섯 에이전트 중 필요한 것만 추천·오케스트레이션 | `/trisakion-route` |
+| `trisakion-agent-router` | ✅ 완성 | 자체 판정 기준 없음 — diff 내용을 보고 위 여섯 에이전트 중 필요한 것만 추천·오케스트레이션 | `/trisakion-route` |
 
 <img src="docs/svg/router_flow.svg" width="700" alt="Agent Router가 diff 범위를 결정하고 1차 후보 필터링, 2차 정밀 판단을 거쳐 후보를 제시한 뒤, 사용자가 선택하면 선택된 에이전트만 순차 호출하는 흐름도. 후보 0개이거나 사용자가 취소하면 선택 UI 없이 종료된다">
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)
 
-위 여섯 개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
+위 일곱 개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
 
 설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다. 아래는 빈 프로젝트 기준 전체 단계다.
 
@@ -233,7 +234,7 @@ rm test-secret.txt
 
 ## 설계 원칙
 
-위 다섯 개 검증 서브에이전트는 아래 원칙을 동일하게 따른다.
+위 여섯 개 검증 서브에이전트는 아래 원칙을 동일하게 따른다.
 
 - **단일 출처 원칙** — SKILL.md 규칙 문구를 에이전트 파일에 복제하지 않고,
   실행 시점마다 Glob/Read로 해당 절을 직접 읽어 판단 기준으로 삼음
@@ -271,7 +272,7 @@ rm -rf "$tdcs_dir"
 
 ## 한계 및 개선 과제
 
-- **CI 자동 실행 미지원** — 5개 검증 서브에이전트는 모두 슬래시 커맨드로 수동 호출해야 한다(저장소에 `.github/workflows` 자체가 없음). PR 파이프라인에 연결된 자동 실행은 아직 없다. 매 커밋마다 자동으로 도는 건 pre-commit 크리덴셜 스캐너뿐이다.
+- **CI 자동 실행 미지원** — 6개 검증 서브에이전트는 모두 슬래시 커맨드로 수동 호출해야 한다(저장소에 `.github/workflows` 자체가 없음). PR 파이프라인에 연결된 자동 실행은 아직 없다. 매 커밋마다 자동으로 도는 건 pre-commit 크리덴셜 스캐너뿐이다.
 - **SP/Function 컨벤션은 MySQL 특화** — RESULT 반환 규약(4.4)이 `SIGNAL`, `GET DIAGNOSTICS`, `DECLARE EXIT HANDLER FOR SQLEXCEPTION` 등 MySQL 문법을 전제로 한다. PostgreSQL 등 다른 DBMS나 Python/Go 등 SQL 이외 언어로의 일반화는 다루지 않는다.
 - **멱등성 검증의 명시적 한계** — 멱등 판단 키가 하나의 요청을 유일하게 식별하지 못하는 경우(같은 키로 정당하게 여러 번 호출될 수 있는 경우), 레이스 컨디션 체커는 재시도와 정당한 반복을 구분할 수 없어 위반으로 판정하지 않고 스킵한다(SKILL.md 6.1).
 - **크리덴셜 스캔은 히스토리를 보지 않음** — pre-commit 훅은 워킹트리/스테이징만 검사한다. 과거 커밋에 이미 노출된 시크릿은 이 훅으로 잡히지 않고 키 로테이션과 히스토리 재작성이 별도로 필요하다(SKILL.md 15.3/15.4).

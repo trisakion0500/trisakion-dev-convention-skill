@@ -387,3 +387,31 @@ throw new BusinessException(ResultCode.PROJECT_NOT_FOUND);
    - 노출된 키/비밀번호는 히스토리에서 지우기 전에 **먼저 즉시 재발급/로테이션**한다 — 히스토리에서 지운다고 이미 유출된 값이 무효화되는 게 아니다.
    - 히스토리 자체에서 제거가 필요하면 BFG Repo-Cleaner 또는 `git filter-repo`로 재작성한 뒤, 이미 push된 원격이 있다면 force-push와 함께 협업자 전원에게 재클론을 안내한다.
 
+## 16. 테이블(DDL) 컨벤션
+
+이 절은 SP/Function이 아니라 테이블 정의(`CREATE TABLE`) 자체의 컨벤션을 다룬다. SP가 트랜잭션 안에서 여러 테이블에 접근하는 순서(데드락 방지)는 4.7의 영역이고 여기서는 다루지 않는다.
+
+### 16.1 네이밍/타입
+
+- 테이블명은 단수형 snake_case로 짓는다(`api`, `code_group`, `user_role` 등 — 다대다/이력성 조인 테이블도 복수형이 아니라 단수 명사 조합으로 짓는다).
+- PK는 항상 `{table}_id` 단일 surrogate key이며 `BIGINT UNSIGNED NOT NULL AUTO_INCREMENT`로 둔다.
+- FK 컬럼명은 참조하는 테이블의 PK명을 그대로 따른다(`project_id`가 `project.project_id`를 참조). 단, "행위자"(이 행을 누가 만들었는지 등)를 가리키는 컬럼은 참조 테이블명이 아니라 역할 이름으로 짓는다(`created_by`/`updated_by`/`request_user_id`/`approve_user_id`가 전부 `user.user_id`를 참조) — 이 경우도 타입은 참조 대상 PK와 동일(`BIGINT UNSIGNED`)해야 한다.
+- 상태/구분값 컬럼은 `TINYINT UNSIGNED`로 두고, 코드→의미 매핑을 컬럼 `COMMENT`에 반드시 함께 적는다(예: `상태 (1:사용, 0:중지)`) — 별도 코드 테이블을 두지 않는다.
+- `created_at`/`updated_at`은 `DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`(`updated_at`은 `ON UPDATE CURRENT_TIMESTAMP`를 추가)로 통일한다. Append-Only 로그성 테이블(예: 감사 로그)은 애초에 수정이 없으므로 `updated_at` 자체를 두지 않는다.
+- `created_by`는 `NOT NULL`, `updated_by`는 nullable로 둔다 — 생성자는 항상 존재하지만 수정자는 아직 한 번도 수정되지 않았을 수 있다.
+
+### 16.2 PK/인덱스/FK
+
+- 인덱스 네이밍: 일반 인덱스는 `ix_{컬럼}`, 유니크 제약은 `uk_{컬럼...}`, FK 제약은 `fk_{테이블}_{컬럼}`.
+- FK로 참조되는 컬럼, 조회 조건에 자주 쓰이는 스코핑 컬럼은 반드시 인덱스를 둔다 — FK 제약을 걸 수 있는지 여부와 별개로 인덱스는 항상 있어야 한다.
+- 같은 물리 DB 안의 테이블은 FK 제약을 건다. 물리적으로 분리된 DB(7장)를 참조하는 스코핑 컬럼(예: 로그 테이블의 회사/프로젝트 ID)은 FK를 걸지 않는다 — 참조 대상 테이블이 다른 물리 DB에 있어 애초에 FK로 묶을 수 없기 때문이다. 이 경우도 인덱스는 그대로 두고, 컬럼 `COMMENT`에 "FK 없음"과 그 이유를 명시한다.
+- 복합 유니크 제약이 필요한 조합(예: 한 프로젝트 안에서의 코드 유일성)은 애플리케이션 검증에만 맡기지 않고 DB `UNIQUE KEY`로도 강제한다.
+
+### 16.3 코멘트/문서화 포맷
+
+- 개별 파일 최상단에 SP와 동일한 박스 주석(`-- ---...--- --`)으로 `명칭`/`작성`/`(수정 시)수정`/`내용`을 남긴다.
+- 모든 컬럼에 `COMMENT '...'`를 필수로 단다(한글, 값의 의미를 설명 — 자명해 보이는 컬럼도 예외 없음). `CREATE TABLE` 끝에도 테이블 자체의 `COMMENT='...'`를 남긴다.
+- 문자셋/콜레이션은 `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`로 프로젝트 전체 통일한다.
+- 개별 테이블 파일은 `SET FOREIGN_KEY_CHECKS = 0;`으로 시작해 `SET FOREIGN_KEY_CHECKS = 1;`으로 끝낸다(재실행 시 FK 의존순서와 무관하게 DROP/CREATE 가능하게 하기 위함).
+- 개별 파일을 고치면 같은 DB의 통합 SQL 파일(4.1의 개별 파일+통합 파일 관례와 동일)도 반드시 함께 갱신한다.
+

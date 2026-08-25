@@ -148,6 +148,9 @@ rm -rf "$tdcs_dir"
 | `trisakion-security-audit-agent` | ✅ 완성 | SKILL.md 14.1/14.2/14.3/14.4절 (S2S HMAC 인증·SQLi·비밀번호 저장·XSS/CSRF/httpOnly 쿠키) | `/trisakion-sec` |
 | `trisakion-agent-router` | ✅ 완성 | 자체 판정 기준 없음 — diff 내용을 보고 위 여섯 에이전트 중 필요한 것만 추천·오케스트레이션 | `/trisakion-route` |
 
+> [!NOTE]
+> 각 에이전트 파일 frontmatter의 `model` 값(haiku/sonnet)은 내가 쓰면서 정한 기본값이다 — 텍스트/구조 대조 위주(table-convention-validator·table-lock-order-auditor·batch-lifecycle-auditor·agent-router)는 haiku, 코드 동작을 실제로 추론해야 하는 쪽(sp-convention-validator·race-condition-checker·security-audit-agent)은 sonnet으로 나눠뒀다. 계정/플랜이나 비용·품질 우선순위가 다르면 `.claude/agents/`에 복사한 뒤 이 값을 그대로 필요에 따라 수정하면 된다.
+
 <img src="docs/svg/router_flow.svg" width="700" alt="Agent Router가 diff 범위를 결정하고 1차 후보 필터링, 2차 정밀 판단을 거쳐 후보를 제시한 뒤, 사용자가 선택하면 선택된 에이전트만 순차 호출하는 흐름도. 후보 0개이거나 사용자가 취소하면 선택 UI 없이 종료된다">
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)

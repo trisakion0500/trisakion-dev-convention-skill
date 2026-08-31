@@ -161,13 +161,13 @@ rm -rf "$tdcs_dir"
 
 **1. 스크립트 파일 확보**
 
-Claude Code로 `npx skills add`를 이미 실행했다면 `.claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js`가 이미 있다. 아니라면 이 저장소를 클론해 `scripts/pre-commit-privacy-scan.js` 파일 하나만 프로젝트 아무 위치(예: `scripts/`)에 복사한다. 외부 의존성이 없는 순수 Node 스크립트라 파일만 있으면 된다.
+Claude Code로 `npx skills add`를 이미 실행했다면 `.claude/skills/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js`가 이미 있다. 아니라면 이 저장소를 클론해 `scripts/` 안의 두 파일(`pre-commit-privacy-scan.js`, `package.json`)을 프로젝트 아무 위치(예: `scripts/`)에 함께 복사한다. 외부 의존성이 없는 순수 Node 스크립트라 이 두 파일만 있으면 된다. 같이 복사하는 `package.json`은 `{"type": "commonjs"}` 한 줄짜리 파일로, 스크립트를 담을 프로젝트가 `"type": "module"`이어도 이 스크립트만은 CommonJS(`require`)로 실행되게 고정한다(Node가 파일의 module type을 가장 가까운 `package.json`부터 찾기 때문).
 
 ```bash
 tdcs_dir=$(mktemp -d)
 git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
 mkdir -p scripts
-cp "$tdcs_dir"/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js scripts/
+cp "$tdcs_dir"/trisakion-dev-convention-skill/scripts/pre-commit-privacy-scan.js "$tdcs_dir"/trisakion-dev-convention-skill/scripts/package.json scripts/
 rm -rf "$tdcs_dir"
 ```
 

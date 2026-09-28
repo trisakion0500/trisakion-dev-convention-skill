@@ -155,7 +155,7 @@ rm -rf "$tdcs_dir"
 | `trisakion-architecture-snapshot-generator` | ✅ 완성 | 판정 기준 없음 — 현재 코드 구조를 IR(JSON)로 추출해 개요+경계별 md/SVG 스냅샷 생성 | `/trisakion-arch` |
 
 > [!NOTE]
-> 각 에이전트 파일 frontmatter의 `model` 값(haiku/sonnet)은 내가 쓰면서 정한 기본값이다 — 텍스트/구조 대조 위주(table-convention-validator·table-lock-order-auditor·batch-lifecycle-auditor·agent-router)는 haiku, 코드 동작을 실제로 추론해야 하는 쪽(sp-convention-validator·race-condition-checker·security-audit-agent)은 sonnet으로 나눠뒀다. 계정/플랜이나 비용·품질 우선순위가 다르면 `.claude/agents/`에 복사한 뒤 이 값을 그대로 필요에 따라 수정하면 된다.
+> 각 에이전트 파일 frontmatter의 `model` 값(haiku/sonnet)은 내가 쓰면서 정한 기본값이다 — 텍스트/구조 대조 위주(table-convention-validator·table-lock-order-auditor·batch-lifecycle-auditor·agent-router)는 haiku, 코드 동작을 실제로 추론해야 하는 쪽(sp-convention-validator·race-condition-checker·security-audit-agent)은 sonnet으로 나눠뒀다. 계정/플랜이나 비용·품질 우선순위가 다르면 `.claude/agents/`에 복사한 뒤 이 값을 그대로 필요에 따라 수정하면 된다. `trisakion-architecture-snapshot-generator`의 `maxTurns: 40`도 마찬가지로 내가 쓰던 코드베이스 기준 기본값일 뿐이다 — 바운디드 컨텍스트(경계)가 많은 프로젝트에서 중간에 턴이 끊기면 복사본에서 이 값을 올려 쓰면 된다.
 
 <img src="docs/svg/router_flow.svg" width="700" alt="Agent Router가 diff 범위를 결정하고 1차 후보 필터링, 2차 정밀 판단을 거쳐 후보를 제시한 뒤, 사용자가 선택하면 선택된 에이전트만 순차 호출하는 흐름도. 후보 0개이거나 사용자가 취소하면 선택 UI 없이 종료된다">
 

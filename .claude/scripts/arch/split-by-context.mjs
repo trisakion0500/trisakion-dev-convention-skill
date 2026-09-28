@@ -5,7 +5,7 @@
  * render.mjs가 만드는 IR 스키마/렌더러는 그대로 재사용 — 이 스크립트는 IR을
  * 분할하는 전처리만 담당한다.
  *
- * 사용법: node scripts/arch/split-by-context.mjs <full-ir.json> <outDir> <baseName>
+ * 사용법: node .claude/scripts/arch/split-by-context.mjs <full-ir.json> <outDir> <baseName>
  *
  * 분할 규칙(ponytail: 계층/그래프 라이브러리 없이 boundary 필드 하나로 판단):
  * - 개요: 원본 boundaries를 "기능 컨텍스트"/"공용·부트스트랩" 두 스윔레인으로 모으고,
@@ -134,7 +134,7 @@ function buildIndexMarkdown(contextNames) {
     );
     lines.push(
         "컨텍스트별 상세 " + ir.boundaries.length + "개로 나눠져 있다(분할 기준은 " +
-        "`scripts/arch/split-by-context.mjs` 참고). 각 문서는 같은 이름의 `.light.svg`/" +
+        "`.claude/scripts/arch/split-by-context.mjs` 참고). 각 문서는 같은 이름의 `.light.svg`/" +
         "`.dark.svg`를 함께 갖는다.",
     );
     lines.push("");

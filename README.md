@@ -125,18 +125,19 @@ npx skills add trisakion0500/trisakion-dev-convention-skill --skill trisakion-de
 프로젝트 루트에서 실행하면 `.claude/skills/trisakion-dev-convention-skill/`에 설치된다.
 
 > `--skill` 플래그는 지정한 스킬 디렉토리만 가져오므로 `agents/`·`commands/`는 함께
-> 설치되지 않는다. 아래처럼 필요한 디렉토리를 직접 복사한다. `scripts/arch/`·
+> 설치되지 않는다. 아래처럼 필요한 디렉토리를 직접 복사한다. `.claude/scripts/arch/`·
 > `.claude/hooks/`는 `trisakion-architecture-snapshot-generator` 에이전트 전용이라
-> 그 에이전트를 안 쓸 거면 생략해도 된다.
+> 그 에이전트를 안 쓸 거면 생략해도 된다(프로젝트 루트 `scripts/`는 소비 프로젝트가
+> 이미 쓰고 있을 수 있어 일부러 건드리지 않는다).
 
 ```bash
 tdcs_dir=$(mktemp -d)
 git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
-mkdir -p .claude/agents .claude/commands .claude/hooks scripts/arch
+mkdir -p .claude/agents .claude/commands .claude/hooks .claude/scripts/arch
 cp "$tdcs_dir"/agents/*.md .claude/agents/
 cp "$tdcs_dir"/commands/*.md .claude/commands/
 cp "$tdcs_dir"/.claude/hooks/*.mjs .claude/hooks/
-cp "$tdcs_dir"/scripts/arch/* scripts/arch/
+cp "$tdcs_dir"/.claude/scripts/arch/* .claude/scripts/arch/
 rm -rf "$tdcs_dir"
 ```
 
@@ -262,16 +263,16 @@ diff 내용 기반 추천만 수행하고, 실행 여부는 항상 사용자 확
 npx skills update
 ```
 
-이 명령도 설치 때와 동일하게 `--skill` 스코프만 갱신한다 — `agents/`·`commands/`·`scripts/arch/`·`.claude/hooks/`는 여기 딸려오지 않는다. 이 저장소에서 이 디렉토리들의 파일이 추가되거나 바뀌었으면(예: 검증 로직 수정, 새 서브에이전트 추가) [설치](#설치) 절의 `git clone` + `cp` 절차를 그대로 다시 실행해 소비 프로젝트의 해당 디렉토리를 덮어써야 한다.
+이 명령도 설치 때와 동일하게 `--skill` 스코프만 갱신한다 — `agents/`·`commands/`·`.claude/scripts/arch/`·`.claude/hooks/`는 여기 딸려오지 않는다. 이 저장소에서 이 디렉토리들의 파일이 추가되거나 바뀌었으면(예: 검증 로직 수정, 새 서브에이전트 추가) [설치](#설치) 절의 `git clone` + `cp` 절차를 그대로 다시 실행해 소비 프로젝트의 해당 디렉토리를 덮어써야 한다.
 
 ```bash
 tdcs_dir=$(mktemp -d)
 git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
-mkdir -p .claude/agents .claude/commands .claude/hooks scripts/arch
+mkdir -p .claude/agents .claude/commands .claude/hooks .claude/scripts/arch
 cp "$tdcs_dir"/agents/*.md .claude/agents/
 cp "$tdcs_dir"/commands/*.md .claude/commands/
 cp "$tdcs_dir"/.claude/hooks/*.mjs .claude/hooks/
-cp "$tdcs_dir"/scripts/arch/* scripts/arch/
+cp "$tdcs_dir"/.claude/scripts/arch/* .claude/scripts/arch/
 rm -rf "$tdcs_dir"
 ```
 

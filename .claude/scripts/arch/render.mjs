@@ -2,8 +2,8 @@
 /**
  * 아키텍처 IR(JSON) -> validate / render(md + light.svg + dark.svg).
  * 사용법:
- *   node scripts/arch/render.mjs validate <ir.json> [--json]
- *   node scripts/arch/render.mjs render <ir.json>
+ *   node .claude/scripts/arch/render.mjs validate <ir.json> [--json]
+ *   node .claude/scripts/arch/render.mjs render <ir.json>
  *
  * ponytail: 스키마 검증은 ajv 없이 손으로 짠다 — 이 IR 하나의 좁은 스키마엔 충분하고
  * 새 의존성을 들일 이유가 없다. 레이아웃도 force-directed 라이브러리 없이

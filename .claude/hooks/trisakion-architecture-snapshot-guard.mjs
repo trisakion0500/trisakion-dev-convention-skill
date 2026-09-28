@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * trisakion-architecture-snapshot-generator 전용 PreToolUse 훅.
- * 이 에이전트는 md/SVG/인덱스 문서를 직접 쓰지 않고 scripts/arch/render.mjs와
- * scripts/arch/split-by-context.mjs로만 만들어야 하며, Bash는 기준 커밋 확인(git)과
+ * 이 에이전트는 md/SVG/인덱스 문서를 직접 쓰지 않고 .claude/scripts/arch/render.mjs와
+ * .claude/scripts/arch/split-by-context.mjs로만 만들어야 하며, Bash는 기준 커밋 확인(git)과
  * 이 두 스크립트 실행 외의 임의 명령을 실행하면 안 된다. 그 제약을 여기서 구조적으로
  * 강제한다(에이전트 지시문 위반을 사후 리뷰가 아니라 시도 시점에 막는다).
  */
@@ -31,10 +31,10 @@ const GIT_READONLY_SUBCOMMANDS = new Set(["status", "diff", "log", "show", "rev-
 // 에이전트 지시문(1단계 "git rev-parse --short HEAD")이 실제로 쓰는 플래그만 예외로 둔다.
 const SAFE_GIT_FLAGS = new Set(["--short"]);
 const RENDER_SCRIPTS = new Set([
-    "scripts/arch/render.mjs",
-    "./scripts/arch/render.mjs",
-    "scripts/arch/split-by-context.mjs",
-    "./scripts/arch/split-by-context.mjs",
+    ".claude/scripts/arch/render.mjs",
+    "./.claude/scripts/arch/render.mjs",
+    ".claude/scripts/arch/split-by-context.mjs",
+    "./.claude/scripts/arch/split-by-context.mjs",
 ]);
 
 function isAllowedBashCommand(command) {

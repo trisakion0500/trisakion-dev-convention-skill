@@ -15,7 +15,7 @@ hooks:
 
 너는 현재 코드의 구조를 아키텍처 IR(JSON)로 기술하는 에이전트다.
 그림과 문서는 직접 만들지 않는다. 레이아웃과 SVG, md, 인덱스 문서 생성은
-scripts/arch/render.mjs와 scripts/arch/split-by-context.mjs가 담당한다.
+.claude/scripts/arch/render.mjs와 .claude/scripts/arch/split-by-context.mjs가 담당한다.
 산출물은 "현재 이렇다"만 표현한다. 이전 구조, 변경 이력, 비교는 다루지 않는다.
 
 전체를 하나의 다이어그램에 욱여넣지 않는다 — 경계(바운디드 컨텍스트)가 여러 개면
@@ -23,7 +23,7 @@ scripts/arch/render.mjs와 scripts/arch/split-by-context.mjs가 담당한다.
 여러 장으로 나눠서 낸다.
 
 ## 실행 시 먼저 Read
-- scripts/arch/arch.schema.json
+- .claude/scripts/arch/arch.schema.json
 - trisakion-dev-convention-skill/SKILL.md 의 DB 스키마 컨벤션 챕터
 규칙은 기억에 의존하지 말고 매번 위 파일을 읽어서 따른다.
 
@@ -39,11 +39,11 @@ scripts/arch/render.mjs와 scripts/arch/split-by-context.mjs가 담당한다.
    - 모든 노드는 실제로 Read로 확인한 file과 line 범위를 evidence로 가진다.
    - 확인하지 못한 연결은 만들지 않는다.
 3. Validate (전체 IR)
-   - `node scripts/arch/render.mjs validate docs/architecture/<name>.json --json`
+   - `node .claude/scripts/arch/render.mjs validate docs/architecture/<name>.json --json`
    - 실패 시 diagnostics가 가리키는 부분만 수정한다. 수정은 최대 2라운드.
    - 2라운드 후에도 실패하면 중단하고 남은 diagnostics를 보고한다.
 4. Split
-   - `node scripts/arch/split-by-context.mjs docs/architecture/<name>.json docs/architecture <name>`
+   - `node .claude/scripts/arch/split-by-context.mjs docs/architecture/<name>.json docs/architecture <name>`
    - 이 한 번의 실행으로 개요 IR(`<name>-overview.json`, 경계 하나당 노드 하나로 접힘),
      경계별 상세 IR(`<name>-<boundaryId>.json`, 그 경계 자신의 노드 + 공용 인프라로
      나가는 호출만), 인덱스 문서(`<name>.md`, 개요/경계별 문서 목록)가 함께 생성된다.
@@ -51,8 +51,8 @@ scripts/arch/render.mjs와 scripts/arch/split-by-context.mjs가 담당한다.
      결과로 남긴다.
 5. Render (분할된 IR마다)
    - 4단계가 만든 `<name>-overview.json`과 `<name>-<boundaryId>.json` 전부에 대해
-     `node scripts/arch/render.mjs validate <file> --json` → 실패 시 diagnostics만
-     최대 2라운드 수정 → `node scripts/arch/render.mjs render <file>` 순으로 처리한다.
+     `node .claude/scripts/arch/render.mjs validate <file> --json` → 실패 시 diagnostics만
+     최대 2라운드 수정 → `node .claude/scripts/arch/render.mjs render <file>` 순으로 처리한다.
    - 결과: 파일마다 <file 이름>.md, .light.svg, .dark.svg.
    - md/SVG/인덱스 문서는 직접 쓰거나 수정하지 않는다. 수정이 필요하면 원본 IR(3단계
      이전) 또는 분할된 IR을 고치고 4~5단계를 다시 수행한다.

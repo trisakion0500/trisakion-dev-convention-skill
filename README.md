@@ -6,9 +6,9 @@
 ## 요약
 
 - 한 줄 설명: 개발 컨벤션(SP·동시성·보안) 문서를 실행 시점마다 직접 읽어 코드를 판정하는 검증 서브에이전트 세트.
-- 핵심 구성: 검증 서브에이전트 6개(SP 컨벤션 / 테이블 DDL 컨벤션 / 테이블 잠금순서 / 레이스 컨디션 / 배치 라이프사이클 / 보안) + diff 기반 추천 라우터 1개 + husky pre-commit 크리덴셜 스캔(LLM 미사용, 커밋마다 강제 실행).
+- 핵심 구성: 검증 서브에이전트 6개(SP 컨벤션 / 테이블 DDL 컨벤션 / 테이블 잠금순서 / 레이스 컨디션 / 배치 라이프사이클 / 보안) + diff 기반 추천 라우터 1개 + 아키텍처 스냅샷 생성 에이전트 1개(diff 판정이 아니라 현재 코드 구조를 md/SVG로 스냅샷) + husky pre-commit 크리덴셜 스캔(LLM 미사용, 커밋마다 강제 실행).
 - 실전 검증: [GM Platform](https://github.com/trisakion0500/gm-platform)·[Coupon Platform](https://github.com/trisakion0500/coupon_platform)에 적용 중이며, GM Platform에서 SUPER_ADMIN 권한 우회 Function을 포함한 여러 건의 실제 컨벤션 위반을 발견·수정했다.
-- 상태: 서브에이전트 7개·크리덴셜 스캐너 모두 완성 단계 (자세한 상태는 [서브에이전트](#서브에이전트) 표 참고).
+- 상태: 서브에이전트 8개·크리덴셜 스캐너 모두 완성 단계 (자세한 상태는 [서브에이전트](#서브에이전트) 표 참고).
 
 ## 목차
 
@@ -125,14 +125,18 @@ npx skills add trisakion0500/trisakion-dev-convention-skill --skill trisakion-de
 프로젝트 루트에서 실행하면 `.claude/skills/trisakion-dev-convention-skill/`에 설치된다.
 
 > `--skill` 플래그는 지정한 스킬 디렉토리만 가져오므로 `agents/`·`commands/`는 함께
-> 설치되지 않는다. 아래 두 파일은 필요 시 직접 복사한다.
+> 설치되지 않는다. 아래처럼 필요한 디렉토리를 직접 복사한다. `scripts/arch/`·
+> `.claude/hooks/`는 `trisakion-architecture-snapshot-generator` 에이전트 전용이라
+> 그 에이전트를 안 쓸 거면 생략해도 된다.
 
 ```bash
 tdcs_dir=$(mktemp -d)
 git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
-mkdir -p .claude/agents .claude/commands
+mkdir -p .claude/agents .claude/commands .claude/hooks scripts/arch
 cp "$tdcs_dir"/agents/*.md .claude/agents/
 cp "$tdcs_dir"/commands/*.md .claude/commands/
+cp "$tdcs_dir"/.claude/hooks/*.mjs .claude/hooks/
+cp "$tdcs_dir"/scripts/arch/* scripts/arch/
 rm -rf "$tdcs_dir"
 ```
 
@@ -147,6 +151,7 @@ rm -rf "$tdcs_dir"
 | `trisakion-batch-lifecycle-auditor` | ✅ 완성 | SKILL.md 5.1/5.2/5.3/7.4절 (배치 인스턴스 중복실행·정상종료 훅·시스템 행위자 sentinel·로그 파일명 인스턴스 suffix) | `/trisakion-batch` |
 | `trisakion-security-audit-agent` | ✅ 완성 | SKILL.md 14.1/14.2/14.3/14.4절 (S2S HMAC 인증·SQLi·비밀번호 저장·XSS/CSRF/httpOnly 쿠키) | `/trisakion-sec` |
 | `trisakion-agent-router` | ✅ 완성 | 자체 판정 기준 없음 — diff 내용을 보고 위 여섯 에이전트 중 필요한 것만 추천·오케스트레이션 | `/trisakion-route` |
+| `trisakion-architecture-snapshot-generator` | ✅ 완성 | 판정 기준 없음 — 현재 코드 구조를 IR(JSON)로 추출해 개요+경계별 md/SVG 스냅샷 생성 | `/trisakion-arch` |
 
 > [!NOTE]
 > 각 에이전트 파일 frontmatter의 `model` 값(haiku/sonnet)은 내가 쓰면서 정한 기본값이다 — 텍스트/구조 대조 위주(table-convention-validator·table-lock-order-auditor·batch-lifecycle-auditor·agent-router)는 haiku, 코드 동작을 실제로 추론해야 하는 쪽(sp-convention-validator·race-condition-checker·security-audit-agent)은 sonnet으로 나눠뒀다. 계정/플랜이나 비용·품질 우선순위가 다르면 `.claude/agents/`에 복사한 뒤 이 값을 그대로 필요에 따라 수정하면 된다.
@@ -155,7 +160,7 @@ rm -rf "$tdcs_dir"
 
 ## 커밋 전 크리덴셜 스캔 (pre-commit hook)
 
-위 일곱 개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
+위 여덟 개 서브에이전트와 성격이 다르다 — LLM이 아니라 **husky pre-commit 훅으로 커밋마다 강제 실행되는 순수 Node 스크립트**(`scripts/pre-commit-privacy-scan.js`)로, 토큰 소모 없이 항상 돌고, 그래서 Claude Code 전용이 아니다. `.gitignore`의 `.env`·`.mcp.json` 누락, `.env.example`·`.mcp.json.sample`의 실값, API 키·DB 커넥션 스트링·private key 등 크리덴셜 리터럴, 공인 IP를 스캔해 위반 시 커밋을 막는다. 기준은 SKILL.md 15장.
 
 설치 명령어와 `.husky/pre-commit` 내용은 순수 터미널 커맨드라 Claude Code 없이 Cursor, Codex, 그냥 에디터+터미널 조합에서도 그대로 따라 하면 동일하게 적용된다. 아래는 빈 프로젝트 기준 전체 단계다.
 
@@ -257,14 +262,16 @@ diff 내용 기반 추천만 수행하고, 실행 여부는 항상 사용자 확
 npx skills update
 ```
 
-이 명령도 설치 때와 동일하게 `--skill` 스코프만 갱신한다 — `agents/`·`commands/`는 여기 딸려오지 않는다. 이 저장소에서 `agents/*.md`·`commands/*.md`가 추가되거나 바뀌었으면(예: 검증 로직 수정, 새 서브에이전트 추가) [설치](#설치) 절의 `git clone` + `cp` 절차를 그대로 다시 실행해 소비 프로젝트의 `.claude/agents/`·`.claude/commands/`를 덮어써야 한다.
+이 명령도 설치 때와 동일하게 `--skill` 스코프만 갱신한다 — `agents/`·`commands/`·`scripts/arch/`·`.claude/hooks/`는 여기 딸려오지 않는다. 이 저장소에서 이 디렉토리들의 파일이 추가되거나 바뀌었으면(예: 검증 로직 수정, 새 서브에이전트 추가) [설치](#설치) 절의 `git clone` + `cp` 절차를 그대로 다시 실행해 소비 프로젝트의 해당 디렉토리를 덮어써야 한다.
 
 ```bash
 tdcs_dir=$(mktemp -d)
 git clone https://github.com/trisakion0500/trisakion-dev-convention-skill.git "$tdcs_dir"
-mkdir -p .claude/agents .claude/commands
+mkdir -p .claude/agents .claude/commands .claude/hooks scripts/arch
 cp "$tdcs_dir"/agents/*.md .claude/agents/
 cp "$tdcs_dir"/commands/*.md .claude/commands/
+cp "$tdcs_dir"/.claude/hooks/*.mjs .claude/hooks/
+cp "$tdcs_dir"/scripts/arch/* scripts/arch/
 rm -rf "$tdcs_dir"
 ```
 

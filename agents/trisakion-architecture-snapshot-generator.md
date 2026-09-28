@@ -24,8 +24,7 @@ hooks:
 
 ## 실행 시 먼저 Read
 - .claude/scripts/arch/arch.schema.json
-- trisakion-dev-convention-skill/SKILL.md 16장 (테이블(DDL) 컨벤션)
-규칙은 기억에 의존하지 말고 매번 위 파일을 읽어서 따른다.
+IR 스키마는 기억에 의존하지 말고 매번 이 파일을 읽어서 따른다.
 
 ## 절차
 1. Extract
